@@ -54,17 +54,51 @@
             <a href="/usb/" style="display: inline-block; padding: 0.75rem 1.5rem; background-color: var(--accent-color); border-radius: 6px; font-weight: 500; color: var(--bg-color);">Program One ROM USB →</a>
         </p>
 
+        <p>
+            Subscribe to the <a href="https://www.youtube.com/@piers_rocks" target="_blank">piers.rocks YouTube channel</a> for project updates, technical deep-dives, demonstrations of One ROM in action and sneak peeks at upcoming features and new hardware revisions.
+        </p>
+
         <div class="features">
             <details open>
                 <summary>Key Features</summary>
                 <p>
-                    One ROM fits the exact footprint of original ROM chips sockets without overhanging it. It can be manufactured for under $5 each in quantity using standard/basic two-layer PCB fabrication, with components on a single side.
+                    One ROM fits the exact footprint of original ROM chip sockets without overhang. It can be manufactured for under $5 each in quantity using standard/basic two-layer PCB fabrication, with components on a single side.
                 </p>
                 <p>
                     A single One ROM can replace multiple original ROMs simultaneously - for example, all three ROMs in a Commodore 64 (BASIC, KERNAL, and character set). It stores up to 16 different ROM images, selectable via jumpers, and supports dynamic bank switching to change ROM images on the fly.
                 </p>
                 <p>
-                    Programming is simple: connect 4 wires and run a single command. A $5 Raspberry Pi Pico works as a programmer, and One ROM can be reflashed in-circuit without removal from the host system. The USB variant allows programming directly from your browser with no programmer required.
+                    Programming is simple: connect 4 wires and run a single command. A $5 Raspberry Pi Pico works as a programmer, and One ROM can be reflashed in-circuit without removal from the host system. The USB variant allows programming directly from your browser with no separate programmer required.
+                </p>
+            </details>
+        </div>
+
+        <div class="versions">
+            <details>
+                <summary>Versions</summary>
+                <p>
+                    One ROM is available in two models:
+                    <ul>
+                        <li><strong>Ice</strong> ❄️ Powered by an STM32F4 microcontroller.  Most robust as it has absolute maximum voltage rating of 7.3V.  Only has a single core, so can support fewer advanced run-time features than Fire.</li>
+                        <li><strong>Fire</strong> 🔥 Powered by an RP2350 microcontroller.  Has a more powerful processor so can support more advanced run-time features than Ice.  Less robust, as its absolute maximum voltage rating is 5.5V.</li>
+                    </ul>
+                </p>
+                <p>
+                    There are also two different programming options:
+                    <ul>
+                        <li><strong>USB</strong> 🔌 Easiest to program.  Exposes a micro-USB port for programming directly from your browser. No programmer required.  Currently only available on Ice.</li>
+                        <li><strong>SWD</strong> ⚡ Most powerful.  Exposes SWD pins for programming using an ST-Link, Raspberry Pi Debug Probe, Pico or similar SWD programmer.  Provides advanced features like runtime access to change ROM images and access telemetry while the host system is running.
+                        </li>
+                    </ul>
+                </p>
+                <p>
+                    All models and variants of One ROM support the same core ROM feature sets and functionality.
+                </p>
+                <p>
+                    Ice can be built with many different models of the STM32F4 microcontroller, offering different flash sizes and performance levels.
+                </p>
+                <p>
+                    See <a href="https://github.com/piersfinlayson/one-rom/blob/main/docs/MCU-SELECTION.md" target="_blank">this document</a> for more information on One ROM MCU selection.
                 </p>
             </details>
         </div>
@@ -73,28 +107,28 @@
             <details>
                 <summary>Technical Details</summary>
                 <p>
-                    Firmware is written in C and hand-optimized assembly for performance.  Supporting tooling is written in Rust using embedded-hal and embassy async frameworks. This provides ROM emulation fast enough for vintage systems using low cost microcontrollers.
+                    One ROM firmware is written in C and hand-optimized assembly for performance.  The supporting tooling is primarily written in Rust using async. This provides ROM emulation fast enough for vintage systems using low cost microcontrollers, wrapped by a a robust toolchain.
                 </p>
                 <p>
-                    The RP2350 variant uses the A4 stepping with 5V-tolerant GPIOs, eliminating the need for level shifters. STM32F4 variants (F401, F411, F405, F446) offer different flash capacities and performance levels.
-                </p>
-                <p>
-                    Chip select lines are software-configurable (HIGH or LOW) without hardware jumpers.  A single One ROM can store multiple ROM image types, with different chip select configuration simultaneously.
+                    Chip select lines are software-configurable (HIGH or LOW) without hardware jumpers.  A single One ROM can store multiple different ROM image types, including different chip select configurations, simultaneously.
                 </p>
                 <p>
                     Runtime access via SWD allows changing ROM images and accessing telemetry while the system is running.
+                </p>
+                <p>
+                    The <a href="https://github.com/piersfinlayson/one-rom" target="_blank">GitHub repository</a> contains comprehensive documentation,  resources for developers, and theory of operation.
                 </p>
             </details>
         </div>
 
         <div class="systems">
             <details>
-                <summary>Supported Systems</summary>
+                <summary>Supported Retro Systems</summary>
                 <p>
                     One ROM has been tested and works with Commodore 64, VIC-20, various PET models, 1541 disk drives, IEEE drives, TI-99 and CoCo2. Pre-built firmware configurations are available for these systems.
                 </p>
                 <p>
-                    The design is fast enough for these 8-bit systems, and higher-end STM32 variants can support faster systems if needed. Custom configurations can be created for other vintage computers using the same ROM types.
+                    It is highly likely that One ROM works in other systems - please post in <a href="https://github.com/piersfinlayson/one-rom/discussions/31" target="_blank">this discussion</a> if you get One ROM working in your retro system(s).  If you hit problems, <a href="https://github.com/piersfinlayson/one-rom/issues/new/choose" target="_blank">open an issue</a>.
                 </p>
             </details>
         </div>
@@ -106,7 +140,7 @@
                     If you have a One ROM USB device, program it directly from your browser using the <a href="/usb/">USB Programmer</a>.
                 </p>
                 <p>
-                    For building firmware, accessing hardware designs, and complete documentation, visit the <a href="https://github.com/piersfinlayson/one-rom" target="_blank">One ROM GitHub repository</a>. Pre-built firmware images for popular systems are available in the releases section.
+                    For building firmware, accessing hardware designs, and complete documentation, visit the <a href="https://github.com/piersfinlayson/one-rom" target="_blank">One ROM GitHub repository</a>. Pre-built firmware images for popular systems are available in the <a href ="https://github.com/piersfinlayson/one-rom/releases" target="_blank">releases section</a>.
                 </p>
                 <p>
                     The repository includes detailed instructions for installation, programming, configuration options, and troubleshooting. You can also use <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a>, a companion project, for wireless programming and debugging.
@@ -121,10 +155,10 @@
                     One ROM is <a href="https://github.com/piersfinlayson/one-rom">fully open source</a>. All hardware designs, firmware source code, build system, and documentation are freely available under permissive licenses. The project welcomes contributions and modifications.
                 </p>
                 <p>
-                    You are welcome to modify the One ROM design and firmware, and to sell your own manufactured boards commercially, so long as you comply with the project's licenses.
+                    You are welcome to modify the One ROM design and firmware, and to sell your own manufactured boards commercially, so long as you comply with the project's <a href="https://github.com/piersfinlayson/one-rom/blob/main/LICENSE.md" target="_blank">licenses</a>.
                 </p>
                 <p>
-                    The two-layer PCB design with single-sided component placement keeps manufacturing costs low and supports DIY fabrication. Complete schematics, bill of materials, and Gerber files are provided.
+                    The two-layer PCB design with single-sided component placement keeps manufacturing costs low and supports cheap and DIY fabrication. Complete schematics, bill of materials,  Gerber and other fabrication files are provided.
                 </p>
             </details>
         </div>
@@ -135,9 +169,7 @@
                 <p>
                     One ROM was formerly known as Software Defined Retro ROM (SDRR). The project started with STM32F4 microcontrollers and later expanded to include the Raspberry Pi RP2350 when the A4 stepping was released.
                 </p>
-                <p>
-                    Watch the <a href="https://www.youtube.com/@piers.rocks" target="_blank">YouTube channel</a> for project updates, technical deep-dives, and demonstrations of One ROM in action.
-                </p>
+
             </details>
         </div>
 
@@ -160,7 +192,7 @@
                     <a href="https://github.com/piersfinlayson/one-rom/issues" target="_blank">Issue Tracker</a> - Report bugs, request features, or get help
                 </p>
                 <p>
-                    <a href="https://www.packom.net/product/one-rom/" target="_blank">Buy One ROMs</a> - I sometimes have One ROMs available on my store
+                    <a href="https://www.packom.net/product/one-rom/" target="_blank">Buy One ROMs</a> - I sometimes have One ROMs available on my store.  If you are selling One ROM, please let me know so I can link to your store here. 
                 </p>
             </details>
         </div>
