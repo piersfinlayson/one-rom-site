@@ -92,14 +92,14 @@
                         </select>
                         
                         <div class="select-row">
-                            <label>Hardware Revision:</label>
+                            <label>PCB Revision:</label>
                             <select id="hwRevSelect" disabled>
                                 <option value="">Select...</option>
                             </select>
                         </div>
                         
                         <div class="select-row">
-                            <label>MCU:</label>
+                            <label>STM32 Variant:</label>
                             <select id="mcuSelectPrebuilt" disabled>
                                 <option value="">Select...</option>
                             </select>
@@ -140,9 +140,9 @@
                             <li>Mac - not required</li>
                         </ul>
                     </li>
-                    <li>Choose the firmware source: URL or Local File.</li>
-                    <li>Select the STM32 variant you are programming.</li>
-                    <li>Enter the URL of the One ROM .bin file you wish to program (e.g. https://one.piers.rocks/bin/firmware.bin), or select a local file.</li>
+                    <li>Choose the firmware source: Pre-built image, Local file or URL.</li>
+                    <li>Select the STM32 variant you are programming, and in the case of the pre-built image, your PCB revision and desired One ROM firmware version.</li>
+                    <li>Choose a pre-built config, select a local file, or enter the URL of the One ROM .bin file to program.</li>
                     <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
                     <li>Click the "Program" button.</li>
                     <li>A popup will appear asking you to select a device. Select "STM32 BOOTLOADER" and click "Connect".</li>
