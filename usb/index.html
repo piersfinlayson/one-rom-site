@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>One ROM USB Programmer</title>
+    <meta name="description" content="Programs the USB version of One ROM - the most flexible retro ROM replacement">
+    <link rel="canonical" href="https://onerom.org/usb/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/usb/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One ROM USB Programmer | piers.rocks">
+    <meta property="og:description" content="Programs the USB version of One ROM - the most flexible retro ROM replacement">
+    <meta property="og:image" content="https://onerom.org/usb/images/one-rom-ice-usb.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="twitter:domain" content="onerom.org">
+    <meta property="twitter:url" content="https://onerom.org/usb/">
+    <meta name="twitter:title" content="One ROM USB Programmer | piers.rocks">
+    <meta name="twitter:description" content="Programs the USB version of One ROM - the most flexible retro ROM replacement">
+    <meta name="twitter:image" content="https://onerom.org/usb/images/one-rom-ice-usb.png">
+
+    <!-- Script which contains the WebUSB DFU functions -->
+    <script src="usbDfuDevice.js"></script>
+</head>
+
+<!-- Page HTML content -->
+
+<body>
+    <div class="app">
+
+        <!-- Title -->
+        <h1>One ROM USB Programmer</h1>
+        <p>
+            This page can be used to program One ROM USB, using <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser.  See <a href="#usage">Usage</a> for instructions.
+        </p>
+
+        <!-- Update tab navigation to include Pre-built -->
+        <div class="tab-navigation">
+            <button class="tab-button active" data-tab="prebuilt">Pre-built Image</button>
+            <button class="tab-button" data-tab="file">Local Image</button>
+            <button class="tab-button" data-tab="url">URL Image</button>
+        </div>
+
+        <div class="tab-content-container">
+            <div class="entry-boxes">
+                <!-- URL tab -->
+                <div class="tab-input" data-tab="url">
+                    <select id="mcuSelectUrl" class="mcu-select">
+                        <option value="">STM32 Variant</option>
+                        <option value="F401RB">F401RB</option>
+                        <option value="F401RC">F401RC</option>
+                        <option value="F401RE">F401RE</option>
+                        <option value="F405RG">F405RG</option>
+                        <option value="F411RC">F411RC</option>
+                        <option value="F411RE">F411RE</option>
+                        <option value="F446RC">F446RC</option>
+                        <option value="F446RE">F446RE</option>
+                    </select>
+                    <input id="fileLocationBox" type="url" placeholder="https://one.piers.rocks/bin/firmware.bin" style="flex-grow: 1;">
+                </div>
+                
+                <!-- Local File tab -->
+                <div class="tab-input" data-tab="file" style="display: none;">
+                    <select id="mcuSelectFile" class="mcu-select">
+                        <option value="">STM32 Variant</option>
+                        <option value="F401RB">F401RB</option>
+                        <option value="F401RC">F401RC</option>
+                        <option value="F401RE">F401RE</option>
+                        <option value="F405RG">F405RG</option>
+                        <option value="F411RC">F411RC</option>
+                        <option value="F411RE">F411RE</option>
+                        <option value="F446RC">F446RC</option>
+                        <option value="F446RE">F446RE</option>
+                    </select>
+                    <input id="fileUploadBox" type="file" accept=".bin" style="flex-grow: 1;">
+                </div>
+                
+                <!-- Pre-built Images tab -->
+                <div class="tab-input" data-tab="prebuilt" style="display: none;">
+                    <div id="prebuiltLoading">Loading releases...</div>
+                    <div id="prebuiltSelectors" style="display: none;">
+                        <select id="modelSelect" style="display: none;">
+                            <option value="">Model</option>
+                        </select>
+                        
+                        <div class="select-row">
+                            <label>Hardware Revision:</label>
+                            <select id="hwRevSelect" disabled>
+                                <option value="">Select...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="select-row">
+                            <label>MCU:</label>
+                            <select id="mcuSelectPrebuilt" disabled>
+                                <option value="">Select...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="select-row">
+                            <label>Firmware Version:</label>
+                            <select id="versionSelect" disabled>
+                                <option value="">Select...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="select-row">
+                            <label>ROM Config:</label>
+                            <select id="romConfigSelect" disabled>
+                                <option value="">Select...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="configDescription" class="config-description"></div>
+                </div>
+            </div>
+            
+            <div class="buttons-and-bar">
+                <button id="connectProgramButton">Program</button>
+                <progress id="progressBar" value="0" max="100"></progress>
+            </div>
+        </div>
+
+        <div class="usage">
+            <details>
+                <summary id="usage">Usage</summary>
+                <ol>
+                    <li>First time setup:
+                        <ul>
+                            <li><a href="#windows">Windows</a></li>
+                            <li><a href="#linux">Linux</a></li>
+                            <li>Mac - not required</li>
+                        </ul>
+                    </li>
+                    <li>Choose the firmware source: URL or Local File.</li>
+                    <li>Select the STM32 variant you are programming.</li>
+                    <li>Enter the URL of the One ROM .bin file you wish to program (e.g. https://one.piers.rocks/bin/firmware.bin), or select a local file.</li>
+                    <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
+                    <li>Click the "Program" button.</li>
+                    <li>A popup will appear asking you to select a device. Select "STM32 BOOTLOADER" and click "Connect".</li>
+                    <li>The button text will change to "Erasing". Wait for this to complete.</li>
+                    <li>The button text will change to "Programming". Wait for this to complete.</li>
+                    <li>When done, an alert box will appear indicating that the programming is complete. You can now disconnect the One ROM and plug it into your retro system.</li>
+                </ol>
+            </details>
+        </div>
+
+        <div class="problems">
+            <details>
+                <summary id="problems">Problems</summary>
+                <p>
+                    If you encounter any issues using this programmer, <a href="#" id="githubIssueLink1" target="_blank">raise a GitHub issue</a>.
+                </p>
+            </details>
+        </div>
+
+        <div class="faq">
+            <details>
+                <summary id="faq">FAQ</summary>
+                <ul>
+                    <ul><strong>Q: What if I hit problems?</strong></ul>
+                    <ul><strong>A:</strong> <a href="#" id="githubIssueLink" target="_blank">Raise a GitHub issue</a>.</ul>
+                    <ul><strong>Q: Why do I have to select the STM32 variant?</strong></ul>
+                    <ul><strong>A:</strong> So the programmer can ensure the firmware you provided is for your specific STM32 chip, and that your One ROM USB has enough flash space for the firmware image.</ul>
+                    <ul><strong>Q: How do I know what STM32 variant my One ROM has?</strong></ul>
+                    <ul><strong>A:</strong> Read the part number from One ROM's main IC.  You are looking for the 6 characters immediately after "STM32".</ul>
+                    <ul><strong>Q: Why isn't there a pre-built image for my system?</strong></ul>
+                    <ul><strong>A:</strong> Either build it yourself using the <a href="https://github.com/piersfinlayson/one-rom">One ROM github repo</a>, or <a href="#" id="githubIssueLink3" target="_blank">raise a GitHub issue</a> letting us know where we can find the ROM image(s) you want One ROM to serve.</ul>
+                    <ul><strong>Q: Why isn't my STM32 variant listed?</strong></ul>
+                    <ul><strong>A:</strong> Pre-built images are available for the most commonly used STM32 variants.  You can build images for other variants using the <a href="https://github.com/piersfinlayson/one-rom">One ROM github repo</a>.</ul>
+                    <ul><strong>Q: Can I use this with Firefox, Safari, or another non-Chromium browser?</strong></ul>
+                    <ul><strong>A:</strong> No, WebUSB, the technology behind this programmer, is only supported in Chromium based browsers like Chrome and Edge.</ul>
+                    <ul><strong>Q: Can I use this on Linux or Mac?</strong></ul>
+                    <ul><strong>A:</strong> Yes, but you must still use a Chromium based browser.</ul>
+                    <ul><strong>Q: Can I use this with a non-USB version of One ROM?</strong></ul>
+                    <ul><strong>A:</strong> No, this programmer only works with the USB version of One ROM.</ul>
+                    <ul><strong>Q: Can I use this to program other, non-One ROM, STM32 devices?</strong></ul>
+                    <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on a generic STM32 DFI implementation, and its code is MIT licensed, so you are free to copy and modify it for your own purposes.</ul>
+                    <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
+                    <ul><strong>A:</strong> We have no idea - maybe if you are using Chrome. Let me us know via github if you get this working!</ul>
+            </details>
+        </div>
+
+        <div class="windows">
+            <details>
+                <summary id="windows">Windows Setup</summary>
+                <ol>
+                    <li>Download and install <a href="https://zadig.akeo.ie/" target="_blank">Zadig</a>.</li>
+                    <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB, jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
+                    <li>In Zadig, select "Options" &gt; "List All Devices".</li>
+                    <li>In the dropdown, select "STM32 BOOTLOADER".</li>
+                    <li>From the driver selection box on the right of the big green arrow, select "WinUSB (some version number)".</li>
+                    <li>Click "Install Driver". If it says "Replace Driver" or "Reinstall Driver", click that instead.</li>
+                </ol>
+                <p><img src="images/zadig-1.png" alt="Zadig showing STM32 BOOTLOADER selected with WinUSB driver ready to install" style="width: 75%;"></p>
+                <ol start="7">
+                    <li>Wait for the installation to complete.  It may take a few seconds for the progress pop-up to appear.</li>
+                </ol>
+                <p><img src="images/zadig-2.png" alt="Zadig driver installation progress bar" style="width: 50%;"></p>
+                <p><img src="images/zadig-3.png" alt="Zadig driver installation successful completion dialog" style="width: 50%;"></p>
+                <ol start="8">
+                    <li>You can now close Zadig.</li>
+                </ol>
+            </details>
+        </div>
+
+        <div class="linux">
+            <details>
+                <summary id="linux">Linux Setup</summary>
+                <ol>
+                    <li>
+                        Create a file called <code>/etc/udev/rules.d/51-one-rom.rules</code> with the following content:
+                        <pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", MODE="0666"</code></pre>
+                    </li>
+                    <li>
+                        Then run:
+                        <pre><code>sudo udevadm control --reload-rules
+sudo udevadm trigger</code></pre>
+                    </li>
+                    <li>
+                        If you are using Chromium installed via snap, you need to allow Chromium to use USB by running:
+                        <pre><code>snap connect chromium:raw-usb</code></pre>
+                        Then restart Chromium.
+                    </li>
+                </ol>
+            </details>
+        </div>
+
+        <div class="technical">
+            <details>
+                <summary id="technical">How It Works</summary>
+                <ul>
+                    <li>The page uses <a href="https://en.wikipedia.org/wiki/WebUSB" target="_blank">WebUSB</a> to access One ROM USB directly from your browser.</li>
+                    <li>For security reasons, WebUSB is only available when this site is served over HTTPS (or from localhost) - you are recommended to use it at <a href="https://onerom.piers.rocks" target="_blank">https://onerom.piers.rocks</a>.  This version is built directly from the main branch of the One ROM github repository.</li>
+                    <li>Only the device you select when you hit "Program" can be accessed by this page's javascript code - your other USB devices are not visible to it.  None of your devices, including your chosen one, are visible to the server.</li>
+                    <li>The page's javascript code implements the STM32 DFU protocol, performing the necessary flash erase and programming operations on your One ROM USB.</li>
+                    <li>The firmware on your One ROM USB can only be updated when it is in DFU (Device Firmware Update) mode.  This is automatically enabled when you plug in One ROM to a USB host, like a PC, unless you have a completely "fresh from the factory" One ROM USB.</li>
+                    <li style="list-style-type: none;">If you have factory fresh One ROM USB, you need to manually put it into DFU mode before flashing, by jumping B0 and 3V3 on the underside of One ROM, while plugging it into USB.</li>
+                    <li style="list-style-type: none;">One ROM's status LED is lit dimly when in DFU mode.</li>
+                </ul>
+            </details>
+        </div>
+
+        <div class="privacy">
+            <details>
+                <summary id="privacy">Privacy</summary>
+                <p>
+                    The One ROM USB Programmer is hosted and served by GitHub Pages.  It retrieves One ROM firmware manifest information from GitHub.  GitHub may log your browser details and IP address.
+                </p>
+                <p>
+                    Most of the site's functionality runs entirely in your browser, and no data is sent to the server:
+                    <ul>
+                        <li>If you flash a pre-built image, the image is downloaded from GitHub via a piers.rocks server.  This is done to work around javasript limitations when retrieving GitHub release artifacts.  The piers.rocks server logs your browser's User-Agent string (which typically includes your OS and browser version) and the firmware file being downloaded, but <strong>does not</strong> log any personally identifiable information like your IP address.</li>
+                        <li>If you flash a local file, it is read directly from your computer, and not sent to any server.</li>
+                        <li>If you flash an image from a URL, the image is downloaded directly from that server by your browser.  That server may log your IP address and browser details, as any web server might.</li>
+                    </ul>
+                </p>
+                <p>
+                    If you have any questions about privacy, please <a href="#" id="githubIssueLink2" target="_blank">raise a GitHub issue</a>.
+                </p>
+            </details>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+
+            <p>
+                <a href="https://onerom.org/" target="_blank">One ROM</a><br>The most flexible retro ROM replacement
+            </p>
+
+            <p>
+                Copyright © 2025<br><a href="https://piers.rocks" target="_blank" style="display: block; text-align: right;">piers.rocks</a>
+            </p>
+
+        </footer>
+
+    </div>
+
+</body>
+
+
+<!-- Javascript for interacting with the button and progress bar -->
+
+<script>
+
+    // Create a USB dfu device object
+    let dfu = new usbDfuDevice();
+
+    // MCU variant mapping to firmware values.
+    // The numerical values match the enums in config_base.h.  They are used
+    // to verify the selected MCU matches the firmware being programmed.
+    const mcuVariantMap = {
+        'F401RB': { line: 0x0004, storage: 0x01 },  // F401BC + B
+        'F401RC': { line: 0x0004, storage: 0x02 },  // F401BC + C
+        'F401RE': { line: 0x0000, storage: 0x04 },  // F401DE + E
+        'F405RG': { line: 0x0001, storage: 0x06 },  // F405 + G
+        'F411RC': { line: 0x0002, storage: 0x02 },  // F411 + C
+        'F411RE': { line: 0x0002, storage: 0x04 },  // F411 + E
+        'F446RC': { line: 0x0003, storage: 0x02 },  // F446 + C
+        'F446RE': { line: 0x0003, storage: 0x04 }   // F446 + E
+    };
+
+    // Reverse lookup: convert firmware MCU values to variant name
+    function getMcuVariantName(line, storage) {
+        for (const [variant, values] of Object.entries(mcuVariantMap)) {
+            if (values.line === line && values.storage === storage) {
+                return variant;
+            }
+        }
+        return "Unknown (line=0x" + line.toString(16) + " storage=0x" + storage.toString(16) + ")";
+    }
+
+    // Reference to the text boxes, button and progress bar
+    const mcuSelectBox = document.getElementById('mcuSelectBox');
+    const pageSizeBox = document.getElementById('pageSizeBox');
+    const connectProgramButton = document.getElementById('connectProgramButton');
+    const progressBar = document.getElementById('progressBar');
+
+    // Get references to tab elements
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabInputs = document.querySelectorAll('.tab-input');
+
+    // When the button is clicked
+    connectProgramButton.addEventListener('click', function () {
+
+        // Start the update function (This is an async process)
+        startUpdate();
+    });
+
+    // Validate firmware binary
+    function validateFirmware(fileArr, mcuVariant) {
+        const view = new Uint8Array(fileArr);
+        const infoStructBase = 0x200;
+        
+        // Check for SDRR signature at offset 0x200
+        const expectedSignature = [0x53, 0x44, 0x52, 0x52]; // "SDRR" in ASCII
+        
+        if (fileArr.byteLength < infoStructBase + expectedSignature.length) {
+            throw ("Error: Invalid One ROM .bin file (Firmware file too small - expected \"SDRR\" signature at offset 0x200)");
+        }
+        
+        for (let i = 0; i < expectedSignature.length; i++) {
+            if (view[infoStructBase + i] !== expectedSignature[i]) {
+                throw ("Error: Invalid One ROM .bin file (missing \"SDRR\" signature at offset 0x200)");
+            }
+        }
+        
+        // Check MCU line and storage match selected variant
+        const mcuLineOffset = infoStructBase + 0x1C;
+        const mcuStorageOffset = infoStructBase + 0x1E;
+        
+        const mcuLine = view[mcuLineOffset] | (view[mcuLineOffset + 1] << 8);
+        const mcuStorage = view[mcuStorageOffset] | (view[mcuStorageOffset + 1] << 8);
+        
+        const expectedMcu = mcuVariantMap[mcuVariant];
+        if (!expectedMcu) {
+            throw ("Error: Unknown STM32 variant selected");
+        }
+        
+        if (mcuLine !== expectedMcu.line || mcuStorage !== expectedMcu.storage) {
+            const actualMcu = getMcuVariantName(mcuLine, mcuStorage);
+            throw ("Error: One ROM firmware is for wrong STM32 variant (Firmware is for " + 
+                   actualMcu + ", expected " + mcuVariant + ")");
+        }
+        
+        // Check USB DFU support flag in extra_info block
+        const pointerOffset = infoStructBase + 0x38;
+        const flashBase = 0x08000000;
+        
+        // Read pointer (little-endian)
+        if (fileArr.byteLength < pointerOffset + 4) {
+            throw ("Error: Invalid One ROM .bin file (Firmware file too small - cannot read extra_info pointer)");
+        }
+        
+        const pointer = view[pointerOffset] | 
+                       (view[pointerOffset + 1] << 8) | 
+                       (view[pointerOffset + 2] << 16) | 
+                       (view[pointerOffset + 3] << 24);
+        
+        // Convert flash address to file offset
+        const extraInfoOffset = pointer - flashBase;
+        
+        if (extraInfoOffset < 0 || extraInfoOffset + 5 > fileArr.byteLength) {
+            throw ("Error: Invalid One ROM .bin file (Invalid extra_info pointer in firmware 0x" + pointer.toString(16) + ")");
+        }
+        
+        // Check USB DFU support flag at extra_info + 4
+        const usbDfuSupport = view[extraInfoOffset + 4];
+        
+        if (usbDfuSupport !== 1) {
+            throw ("Error: One ROM firmware provided does not support USB (Choose a firmware image that supports USB)");
+        }
+        
+        return true;
+    }
+
+    // This function runs the update process. It is asynchronous because the operations inside take some time
+    async function startUpdate() {
+
+        // Disable the button to avoid the user calling this multiple times
+        connectProgramButton.disabled = true;
+
+        // Try to get the file and run the update sequence
+        try {
+
+            // Variables to hold the firmware data and MCU variant
+            let fileArr;
+            let mcuVariant;
+            
+            // Determine which tab is currently active
+            const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+            
+            if (activeTab === 'url') {
+                // URL tab: Download firmware from provided URL
+                
+                // Check MCU variant is selected
+                mcuVariant = document.getElementById('mcuSelectUrl').value;
+                if (mcuVariant == "") {
+                    throw ("Error: No STM32 variant selected");
+                }
+
+                // Check URL is provided
+                if (fileLocationBox.value == "") {
+                    throw ("Error: No URL provided");
+                }
+
+                // Fetch the firmware file from the URL
+                let response = await fetch(fileLocationBox.value);
+
+                // Check for HTTP errors
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw ("Error: Firmware file not found at the specified URL");
+                    } else if (response.status === 403) {
+                        throw ("Error: Access denied to firmware file");
+                    } else {
+                        throw ("Error: Failed to download firmware file (" + response.status + " " + response.statusText + ")");
+                    }
+                }
+
+                // Get the firmware data as an array buffer
+                fileArr = await response.arrayBuffer();
+                
+            } else if (activeTab === 'file') {
+                // Local File tab: Read firmware from uploaded file
+                
+                // Check MCU variant is selected
+                mcuVariant = document.getElementById('mcuSelectFile').value;
+                if (mcuVariant == "") {
+                    throw ("Error: No STM32 variant selected");
+                }
+                
+                // Check a file has been selected
+                if (!fileUploadBox.files || fileUploadBox.files.length === 0) {
+                    throw ("Error: No file selected");
+                }
+                
+                // Read the file data
+                const file = fileUploadBox.files[0];
+                fileArr = await file.arrayBuffer();
+                
+            } else if (activeTab === 'prebuilt') {
+                // Pre-built Images tab: Download firmware from GitHub release
+                
+                // Check that a firmware has been selected through the dropdowns
+                if (!PrebuiltManager.selectedArtifact) {
+                    throw ("Error: No firmware selected");
+                }
+                
+                // Download the firmware and verify its SHA256 checksum
+                fileArr = await PrebuiltManager.downloadAndVerify();
+                
+                // Convert MCU format from manifest (lowercase like "f446rc") to validation format (uppercase like "F446RC")
+                mcuVariant = PrebuiltManager.selectedArtifact.mcu.toUpperCase();
+                
+            } else {
+                throw ("Error: No firmware source provided");
+            }
+
+            // Validate firmware before flashing
+            validateFirmware(fileArr, mcuVariant);
+            
+            // Run the update sequence (existing code)
+            await dfu.runUpdateSequence(fileArr, mcuVariant);
+
+            // Done
+            alert("One ROM USB programming complete");
+        }
+
+        // On any caught errors
+        catch (error) {
+
+            // User cancelled device selection - not an error
+            if (error.name === 'NotFoundError' || 
+                (error.message && error.message.includes('No device selected'))) {
+                dfuDisconnectHandler();
+                return;
+            }
+
+            // Reset the button and progress bar
+            dfuDisconnectHandler();
+
+            // Show the error as an alert
+            alert(error);
+        }
+    }
+
+    // Updates the button text. "Connecting", "Erasing", etc.
+    function dfuStatusHandler(status) {
+        connectProgramButton.innerHTML = status;
+    }
+
+    // Updates the progress bar value. 0 - 100%
+    function dfuProgressHandler(value) {
+        progressBar.value = value;
+    }
+
+    // This function is called on a disconnect event
+    function dfuDisconnectHandler() {
+
+        // Reset the button back to 'connect'
+        connectProgramButton.innerHTML = "Program";
+
+        // Enable the button again
+        connectProgramButton.disabled = false;
+
+        // Reset the progress bar
+        progressBar.value = 0;
+    }
+
+    // Build GitHub issue URL with template
+    (function() {
+        const title = "One ROM USB Site Issue - Brief Description Here";
+        const body = `## Environment
+
+**Browser and Version:** 
+**Operating System:** 
+**STM32 Variant:** 
+
+## Issue Description
+
+<!-- Please describe the problem you encountered -->
+
+## Steps to Reproduce
+
+1. 
+2. 
+3. 
+
+## Error Messages
+
+<!-- If applicable, please paste any error messages here -->
+
+## Firmware
+
+Please upload your firmware .bin file if possible.
+
+## Additional Context
+
+<!-- Any other relevant information -->`;
+
+        const url = `https://github.com/piersfinlayson/one-rom/issues/new?` +
+                    `title=${encodeURIComponent(title)}&` +
+                    `body=${encodeURIComponent(body)}`;
+        
+        document.getElementById('githubIssueLink').href = url;
+        document.getElementById('githubIssueLink1').href = url;
+        document.getElementById('githubIssueLink2').href = url;
+        document.getElementById('githubIssueLink3').href = url;
+    })();
+
+    // Pre-built images functionality
+    const PrebuiltManager = {
+        manifests: [],
+        filteredArtifacts: [],
+        selectedArtifact: null,
+        
+        async init() {
+            try {
+                // Check if CORS proxy is available
+                try {
+                    const healthCheck = await fetch('https://github-cors.piers.rocks/health', {
+                        method: 'GET',
+                        cache: 'no-store'
+                    });
+                    if (!healthCheck.ok) {
+                        throw new Error('Health check failed');
+                    }
+                } catch (proxyError) {
+                    document.getElementById('prebuiltLoading').innerHTML = 
+                        '<p><strong>Temporarily Unavailable</strong></p>' +
+                        '<p>Pre-built images cannot be downloaded as the server is down. Try the Local Image or URL Image options instead, or come back later.</p><br/>';
+                    return;
+                }
+
+                // Fetch releases list from your repo
+                const response = await fetch('https://raw.githubusercontent.com/piersfinlayson/one-rom/main/releases/releases.json');
+                if (!response.ok) throw new Error('Failed to fetch releases list');
+                
+                const releases = await response.json();
+                
+                // Load manifests from latest to oldest (reverse order since we append to the list)
+                for (const release of releases.reverse()) {
+                    try {
+                        // Fetch the manifest for this release
+                        const manifestUrl = `https://raw.githubusercontent.com/piersfinlayson/one-rom/main/releases/manifest-${release.tag}.json`;
+                        const manifestResponse = await fetch(manifestUrl);
+                        
+                        if (manifestResponse.ok) {
+                            const manifest = await manifestResponse.json();
+                            this.manifests.push(manifest);
+                            
+                            // Update UI after first manifest loads
+                            if (this.manifests.length === 1) {
+                                this.showSelectors();
+                                this.populateModels();
+                            } else {
+                                this.updateSelectors();
+                            }
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                
+                if (this.manifests.length === 0) {
+                    document.getElementById('prebuiltLoading').textContent = 'No pre-built images available';
+                } else {
+                    // Auto-select ice model and trigger cascade
+                    const modelSelect = document.getElementById('modelSelect');
+                    modelSelect.value = 'ice';
+                    modelSelect.style.display = 'none';
+                    this.filterByModel('ice');
+                }
+            } catch (error) {
+                document.getElementById('prebuiltLoading').textContent = 'Error loading releases: ' + error.message;
+            }
+        },
+        
+        showSelectors() {
+            document.getElementById('prebuiltLoading').style.display = 'none';
+            document.getElementById('prebuiltSelectors').style.display = 'flex';
+        },
+        
+        populateModels() {
+            const modelSelect = document.getElementById('modelSelect');
+            const models = new Set();
+            
+            this.manifests.forEach(manifest => {
+                Object.keys(manifest.models || {}).forEach(model => models.add(model));
+            });
+            
+            models.forEach(model => {
+                const manifest = this.manifests.find(m => m.models[model]);
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = manifest.models[model].display;
+                modelSelect.appendChild(option);
+            });
+        },
+        
+        updateSelectors() {
+            // Re-filter based on current selections
+            const model = document.getElementById('modelSelect').value;
+            if (model) {
+                this.filterByModel(model);
+            }
+        },
+        
+        filterByModel(model) {
+            const hwRevSelect = document.getElementById('hwRevSelect');
+            hwRevSelect.innerHTML = '<option value="">Select ...</option>';
+            hwRevSelect.disabled = false;
+            
+            const hwRevs = new Set();
+            this.manifests.forEach(manifest => {
+                manifest.artifacts.forEach(artifact => {
+                    if (artifact.model === model) {
+                        // Only include hw_revs with USB support
+                        if (manifest.hardware[artifact.hw_rev] && manifest.hardware[artifact.hw_rev].usb_support === true) {
+                            hwRevs.add(artifact.hw_rev);
+                        }
+                    }
+                });
+            });
+            
+            hwRevs.forEach(hwRev => {
+                const manifest = this.manifests.find(m => m.hardware[hwRev]);
+                if (manifest) {
+                    const option = document.createElement('option');
+                    option.value = hwRev;
+                    option.textContent = manifest.hardware[hwRev].display;
+                    hwRevSelect.appendChild(option);
+                }
+            });
+            
+            // Reset downstream selectors
+            this.resetSelector('mcuSelectPrebuilt');
+            this.resetSelector('versionSelect');
+            this.resetSelector('romConfigSelect');
+            document.getElementById('configDescription').classList.remove('visible');
+        },
+        
+        filterByHwRev(model, hwRev) {
+            const mcuSelect = document.getElementById('mcuSelectPrebuilt');
+            mcuSelect.innerHTML = '<option value="">Select...</option>';
+            mcuSelect.disabled = false;
+            
+            const mcus = new Set();
+            this.manifests.forEach(manifest => {
+                manifest.artifacts.forEach(artifact => {
+                    if (artifact.model === model && artifact.hw_rev === hwRev) {
+                        mcus.add(artifact.mcu);
+                    }
+                });
+            });
+            
+            Array.from(mcus).sort().forEach(mcu => {
+                const option = document.createElement('option');
+                option.value = mcu;
+                option.textContent = mcu.toUpperCase();
+                mcuSelect.appendChild(option);
+            });
+            
+            this.resetSelector('versionSelect');
+            this.resetSelector('romConfigSelect');
+            document.getElementById('configDescription').classList.remove('visible');
+        },
+        
+        filterByMcu(model, hwRev, mcu) {
+            const versionSelect = document.getElementById('versionSelect');
+            versionSelect.innerHTML = '<option value="">Select...</option>';
+            versionSelect.disabled = false;
+            
+            const versions = new Set();
+            this.manifests.forEach(manifest => {
+                const hasArtifact = manifest.artifacts.some(artifact => 
+                    artifact.model === model && artifact.hw_rev === hwRev && artifact.mcu === mcu
+                );
+                if (hasArtifact) {
+                    versions.add(manifest.version);
+                }
+            });
+            
+            Array.from(versions).forEach(version => {
+                const option = document.createElement('option');
+                option.value = version;
+                option.textContent = version;
+                versionSelect.appendChild(option);
+            });
+            
+            this.resetSelector('romConfigSelect');
+            document.getElementById('configDescription').classList.remove('visible');
+        },
+        
+        filterByVersion(model, hwRev, mcu, version) {
+            const romConfigSelect = document.getElementById('romConfigSelect');
+            romConfigSelect.innerHTML = '<option value="">Select...</option>';
+            romConfigSelect.disabled = false;
+            
+            const manifest = this.manifests.find(m => m.version === version);
+            if (!manifest) return;
+            
+            this.filteredArtifacts = manifest.artifacts.filter(artifact =>
+                artifact.model === model && artifact.hw_rev === hwRev && artifact.mcu === mcu
+            );
+            
+            const sortedConfigs = this.filteredArtifacts
+                .map(a => a.rom_config)
+                .sort((a, b) => a.localeCompare(b));
+
+            sortedConfigs.forEach(romConfig => {
+                const option = document.createElement('option');
+                option.value = romConfig;
+                option.textContent = romConfig;
+                romConfigSelect.appendChild(option);
+            });
+            
+            document.getElementById('configDescription').classList.remove('visible');
+        },
+        
+        selectRomConfig(romConfig) {
+            this.selectedArtifact = this.filteredArtifacts.find(a => a.rom_config === romConfig);
+            
+            if (this.selectedArtifact) {
+                const version = document.getElementById('versionSelect').value;
+                const manifest = this.manifests.find(m => m.version === version);
+                
+                if (manifest && manifest.rom_configs && manifest.rom_configs[romConfig]) {
+                    const description = manifest.rom_configs[romConfig].description;
+                    const descDiv = document.getElementById('configDescription');
+                    descDiv.textContent = description;
+                    descDiv.classList.add('visible');
+                }
+            }
+        },
+        
+        resetSelector(id) {
+            const select = document.getElementById(id);
+            select.innerHTML = '<option value="">Select...</option>';
+            select.disabled = true;
+        },
+        
+        async downloadAndVerify() {
+            if (!this.selectedArtifact) {
+                throw new Error('No artifact selected');
+            }
+            
+            // Transform GitHub URL to use CORS proxy
+            const proxyUrl = this.selectedArtifact.url.replace(
+                /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/releases\/download\/(.+)$/,
+                'https://github-cors.piers.rocks/github-release/$1/$2/$3'
+            );
+            
+            const response = await fetch(proxyUrl);
+            if (!response.ok) {
+                throw new Error('Failed to download firmware: ' + response.status);
+            }
+            
+            const arrayBuffer = await response.arrayBuffer();
+            
+            // Verify SHA256
+            if (this.selectedArtifact.sha256) {
+                const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                if (hashHex !== this.selectedArtifact.sha256) {
+                    throw new Error('SHA256 checksum mismatch - firmware may be corrupted');
+                }
+            }
+            
+            return arrayBuffer;
+        }
+    };
+
+    // Add event listeners for pre-built selectors
+    document.getElementById('modelSelect')?.addEventListener('change', function() {
+        if (this.value) {
+            PrebuiltManager.filterByModel(this.value);
+        }
+    });
+
+    document.getElementById('hwRevSelect')?.addEventListener('change', function() {
+        const model = document.getElementById('modelSelect').value;
+        if (this.value && model) {
+            PrebuiltManager.filterByHwRev(model, this.value);
+        }
+    });
+
+    document.getElementById('mcuSelectPrebuilt')?.addEventListener('change', function() {
+        const model = document.getElementById('modelSelect').value;
+        const hwRev = document.getElementById('hwRevSelect').value;
+        if (this.value && model && hwRev) {
+            PrebuiltManager.filterByMcu(model, hwRev, this.value);
+        }
+    });
+
+    document.getElementById('versionSelect')?.addEventListener('change', function() {
+        const model = document.getElementById('modelSelect').value;
+        const hwRev = document.getElementById('hwRevSelect').value;
+        const mcu = document.getElementById('mcuSelectPrebuilt').value;
+        if (this.value && model && hwRev && mcu) {
+            PrebuiltManager.filterByVersion(model, hwRev, mcu, this.value);
+        }
+    });
+
+    document.getElementById('romConfigSelect')?.addEventListener('change', function() {
+        if (this.value) {
+            PrebuiltManager.selectRomConfig(this.value);
+        }
+    });
+
+    // Handle tab switching
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Update button states
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Show/hide appropriate input
+            tabInputs.forEach(input => {
+                if (input.getAttribute('data-tab') === targetTab) {
+                    input.style.display = 'block';
+                } else {
+                    input.style.display = 'none';
+                }
+            });
+            
+            // Initialize prebuilt manager on first view
+            if (targetTab === 'prebuilt' && PrebuiltManager.manifests.length === 0) {
+                PrebuiltManager.init();
+            }
+        });
+    });
+
+    // Initialize correct tab on page load
+    (function() {
+        const activeButton = document.querySelector('.tab-button.active');
+        if (activeButton) {
+            const activeTab = activeButton.getAttribute('data-tab');
+            
+            // Show only the active tab's content
+            tabInputs.forEach(input => {
+                if (input.getAttribute('data-tab') === activeTab) {
+                    input.style.display = 'block';
+                } else {
+                    input.style.display = 'none';
+                }
+            });
+            
+            // Initialize prebuilt manager if pre-built tab is active on load
+            if (activeTab === 'prebuilt') {
+                PrebuiltManager.init().then(() => {
+                    // Auto-select Ice and trigger cascade
+                    const modelSelect = document.getElementById('modelSelect');
+                    modelSelect.value = 'ice';
+                    modelSelect.style.display = 'none'; // Hide it
+                    PrebuiltManager.filterByModel('ice');
+                });
+            }
+        }
+    })();
+
+</script>
+
+</html>

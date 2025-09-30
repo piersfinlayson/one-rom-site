@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>One ROM - The Most Flexible Retro ROM Replacement</title>
+    <meta name="description" content="One ROM is an open source ROM replacement for retro computers like the Commodore 64, VIC-20, and PET. Based on sub-$2 microcontrollers, it emulates 2364, 2332, and 2316 ROMs with in-circuit programming.">
+    <link rel="canonical" href="https://onerom.org/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One ROM - The Most Flexible Retro ROM Replacement">
+    <meta property="og:description" content="Open source ROM replacement for Commodore 64, VIC-20, PET and other retro systems. Under $5 to manufacture, programmable in-circuit.">
+    <meta property="og:image" content="https://onerom.org/images/one-rom-ice-usb.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="twitter:domain" content="onerom.org">
+    <meta property="twitter:url" content="https://onerom.org/">
+    <meta name="twitter:title" content="One ROM - The Most Flexible Retro ROM Replacement">
+    <meta name="twitter:description" content="Open source ROM replacement for Commodore 64, VIC-20, PET and other retro systems. Under $5 to manufacture, programmable in-circuit.">
+    <meta name="twitter:image" content="https://onerom.org/images/one-rom-ice-usb.png">
+</head>
+
+<body>
+    <div class="app">
+
+        <h1>One ROM</h1>
+        
+        <div style="display: flow-root;">
+            <img src="/images/one-rom-ice-usb-trans.png" alt="One ROM USB device" style="float: right; max-width: 400px; margin: 0 0 1rem 1.5rem;">
+            
+            <p>
+                One ROM is the most flexible ROM replacement for retro computers.
+            </p>
+            <p>
+                It is based on a sub-$2 microcontroller.  Boards can be fabbed for under $10 each in small quantities, or under $5 each in larger quantities. 
+            </p>
+            <p>
+                One ROM emulates the 2364, 2332, and 2316 ROMs used in systems like the Commodore 64, VIC-20, PET, and 1541 disk drives.
+            </p>
+            <p>
+                You can program the USB version using your browser.
+            </p>
+        </div>
+        
+        <p style="text-align: center; margin-top: 2rem;">
+            <a href="/usb/" style="display: inline-block; padding: 0.75rem 1.5rem; background-color: var(--accent-color); border-radius: 6px; font-weight: 500; color: var(--bg-color);">Program One ROM USB →</a>
+        </p>
+
+        <div class="features">
+            <details open>
+                <summary>Key Features</summary>
+                <p>
+                    One ROM fits the exact footprint of original ROM chips sockets without overhanging it. It can be manufactured for under $5 each in quantities of 10 or more using standard two-layer PCB fabrication, components on single side.
+                </p>
+                <p>
+                    A single One ROM can replace multiple original ROMs simultaneously - for example, all three ROMs in a Commodore 64 (BASIC, KERNAL, and character set). It stores up to 16 different ROM images, selectable via jumpers, and supports dynamic bank switching to change ROM images on the fly.
+                </p>
+                <p>
+                    Programming is simple: connect 4 wires and run a single command. A $5 Raspberry Pi Pico works as a programmer, and One ROM can be reflashed in-circuit without removal from the host system. The USB variant allows programming directly from your browser with no programmer required.
+                </p>
+            </details>
+        </div>
+
+        <div class="technical">
+            <details>
+                <summary>Technical Details</summary>
+                <p>
+                    Firmware is written in C and hand-optimized assembly for performance.  Supporting tooling is written in Rust using embedded-hal and embassy async frameworks. This provides ROM emulation fast enough for vintage systems using low cost microcontrollers.
+                </p>
+                <p>
+                    The RP2350 variant uses the A4 stepping with 5V-tolerant GPIOs, eliminating the need for level shifters. STM32F4 variants (F401, F411, F405, F446) offer different flash capacities and performance levels.
+                </p>
+                <p>
+                    Chip select lines are software-configurable (HIGH or LOW) without hardware jumpers.  A single One ROM can store multiple ROM image types, with different chip select configuration simultaneously.
+                </p>
+                <p>
+                    Runtime access via SWD allows changing ROM images and accessing telemetry while the system is running.
+                </p>
+            </details>
+        </div>
+
+        <div class="systems">
+            <details>
+                <summary>Supported Systems</summary>
+                <p>
+                    One ROM has been tested and works with Commodore 64, VIC-20, various PET models, 1541 disk drives, IEEE drives, TI-99 and CoCo2. Pre-built firmware configurations are available for these systems.
+                </p>
+                <p>
+                    The design is fast enough for these 8-bit systems, and higher-end STM32 variants can support faster systems if needed. Custom configurations can be created for other vintage computers using the same ROM types.
+                </p>
+            </details>
+        </div>
+
+        <div class="getting-started">
+            <details>
+                <summary>Getting Started</summary>
+                <p>
+                    If you have a One ROM USB device, program it directly from your browser using the <a href="/usb/">USB Programmer</a>.
+                </p>
+                <p>
+                    For building firmware, accessing hardware designs, and complete documentation, visit the <a href="https://github.com/piersfinlayson/one-rom" target="_blank">One ROM GitHub repository</a>. Pre-built firmware images for popular systems are available in the releases section.
+                </p>
+                <p>
+                    The repository includes detailed instructions for installation, programming, configuration options, and troubleshooting. You can also use <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a>, a companion project, for wireless programming and debugging.
+                </p>
+            </details>
+        </div>
+
+        <div class="open-source">
+            <details>
+                <summary>Open Source</summary>
+                <p>
+                    One ROM is fully open source. All hardware designs, firmware source code, build system, and documentation are freely available under permissive licenses. The project welcomes contributions and modifications.
+                </p>
+                <p>
+                    You are welcome to modify the One ROM design and firmware, and to sell your own manufactured boards commercially, so long as you comply with the project's licenses.
+                </p>
+                <p>
+                    The two-layer PCB design with single-sided component placement keeps manufacturing costs low and supports DIY fabrication. Complete schematics, bill of materials, and Gerber files are provided.
+                </p>
+            </details>
+        </div>
+
+        <div class="history">
+            <details>
+                <summary>Project History</summary>
+                <p>
+                    One ROM was formerly known as Software Defined Retro ROM (SDRR). The project started with STM32F4 microcontrollers and later expanded to include the Raspberry Pi RP2350 when the A4 stepping was released.
+                </p>
+                <p>
+                    Watch the <a href="https://www.youtube.com/@piers.rocks" target="_blank">YouTube channel</a> for project updates, technical deep-dives, and demonstrations of One ROM in action.
+                </p>
+            </details>
+        </div>
+
+        <div class="resources">
+            <details>
+                <summary>Resources</summary>
+                <p>
+                    <a href="/usb/">USB Programmer</a> - Program One ROM USB devices directly from your browser
+                </p>
+                <p>
+                    <a href="https://github.com/piersfinlayson/one-rom" target="_blank">GitHub Repository</a> - Source code, hardware designs, and documentation
+                </p>
+                <p>
+                    <a href="https://www.youtube.com/@piers.rocks" target="_blank">YouTube Channel</a> - Project videos and technical tutorials
+                </p>
+                <p>
+                    <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a> - Wireless programmer and debugger companion project
+                </p>
+                <p>
+                    <a href="https://github.com/piersfinlayson/one-rom/issues" target="_blank">Issue Tracker</a> - Report bugs, request features, or get help
+                </p>
+            </details>
+        </div>
+
+        <footer>
+            <p>
+                <a href="https://onerom.org/" target="_blank">One ROM</a><br>The most flexible retro ROM replacement
+            </p>
+
+            <p>
+                Copyright © 2025<br><a href="https://piers.rocks" target="_blank" style="display: block; text-align: right;">piers.rocks</a>
+            </p>
+        </footer>
+
+    </div>
+
+</body>
+
+</html>
