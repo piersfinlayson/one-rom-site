@@ -462,6 +462,8 @@ code {
 }
 
 .config-description {
+    font-family: 'Courier New', Consolas, monospace;
+    font-size: 14px;
     margin-top: 16px;
     padding: 16px;
     background: var(--input-bg-color);
