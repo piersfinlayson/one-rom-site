@@ -31,10 +31,13 @@
 <body>
     <div class="app">
 
-        <h1>One R<span class="o-in-rom">O</span>M</h1>
+<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
+    <h1 style="margin-bottom: 0; border-bottom: none;">One R<span class="o-in-rom">O</span>M</h1>
+    <a href="/usb/" class="gold-button"><span class="michroma">Program One ROM USB →</span></a>
+</div>
         
         <div style="display: flow-root;">
-            <img src="/images/one-rom-ice-usb-trans.png" alt="One ROM USB device" style="float: right; max-width: 400px; margin: 0 0 1rem 1.5rem;">
+            <img src="/images/one-rom/one rom image.png" alt="One ROM USB device" style="float: right; padding-top: 2rem; max-width: 400px; margin: 0 0 1rem 1.5rem;">
             
             <p>
                 One ROM is the most flexible ROM replacement for retro computers.
@@ -46,13 +49,9 @@
                 One ROM emulates the 2364, 2332, and 2316 ROMs used in systems like the Commodore 64, VIC-20, PET, and 1541 disk drives.
             </p>
             <p>
-                You can program the USB version using your browser.
+                You can program the USB version using your <a href="/usb">browser</a>.
             </p>
         </div>
-        
-        <p style="text-align: center; margin-top: 2rem;">
-            <a href="/usb/" style="display: inline-block; padding: 0.75rem 1.5rem; background-color: var(--accent-color); border-radius: 6px; font-weight: 500; color: var(--bg-color);">Program One ROM USB →</a>
-        </p>
 
         <p>
             Subscribe to the
@@ -63,8 +62,10 @@
                 </svg>
                 YouTube channel
             </a>
-            for project updates, technical deep-dives, demonstrations of One ROM in action and sneak peeks at upcoming features and new hardware revisions.
+            for demonstrations of One ROM in action, technical deep-dives, and sneak peeks at upcoming features and new hardware revisions.
         </p>
+
+        <hr>
 
         <div class="features">
             <details open>
@@ -231,15 +232,8 @@
             </details>
         </div>
 
-        <footer>
-            <p>
-                <a href="https://onerom.org/" target="_blank"><span class="michroma">One R<span class="o-in-rom">O</span>M</span></a><br><span class="michroma">The most flexible retro R<span class="o-in-rom">O</span>M replacement</span>
-            </p>
-
-            <p>
-                <span class="michroma">Copyright © 2<span class="o-in-rom">0</span>25</span><br><a href="https://piers.rocks" target="_blank" style="display: block; text-align: right;"><span class="michroma">piers.r<span class="o-in-rom">o</span>cks</span></a>
-            </p>
-        </footer>
+        <div id="footer"></div>
+        <script src="/footer.js"></script>
 
     </div>
 

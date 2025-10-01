@@ -64,7 +64,7 @@
                         <option value="F446RC">F446RC</option>
                         <option value="F446RE">F446RE</option>
                     </select>
-                    <input id="fileLocationBox" type="url" placeholder="https://one.piers.rocks/bin/firmware.bin" style="flex-grow: 1;">
+                    <input id="fileLocationBox" type="url" placeholder="https://onerom.org/rom/firmware.bin" style="flex-grow: 1; width: 45ch;">
                 </div>
                 
                 <!-- Local File tab -->
@@ -80,7 +80,9 @@
                         <option value="F446RC">F446RC</option>
                         <option value="F446RE">F446RE</option>
                     </select>
-                    <input id="fileUploadBox" type="file" accept=".bin" style="flex-grow: 1;">
+                    <label for="fileUploadBox" class="file-button">Choose Firmware File</label>
+                    <span id="fileName" style="margin-left: 0.5rem; color: var(--text-secondary);">No file selected</span>
+                    <input id="fileUploadBox" type="file" accept=".bin" style="display: none;">
                 </div>
                 
                 <!-- Pre-built Images tab -->
@@ -124,7 +126,7 @@
             </div>
             
             <div class="buttons-and-bar">
-                <button id="connectProgramButton">Program</button>
+                <button id="connectProgramButton" class="gold-button">Program</button>
                 <progress id="progressBar" value="0" max="100"></progress>
             </div>
         </div>
@@ -269,20 +271,12 @@ sudo udevadm trigger</code></pre>
             </details>
         </div>
 
-        <!-- Footer -->
-        <footer>
-            <p>
-                <a href="https://onerom.org/" target="_blank"><span class="michroma">One R<span class="o-in-rom">O</span>M</span></a><br><span class="michroma">The most flexible retro R<span class="o-in-rom">O</span>M replacement</span>
-            </p>
+        <div id="footer"></div>
+        <script src="/footer.js"></script>
 
-            <p>
-                <span class="michroma">Copyright © 2<span class="o-in-rom">0</span>25</span><br><a href="https://piers.rocks" target="_blank" style="display: block; text-align: right;"><span class="michroma">piers.r<span class="o-in-rom">o</span>cks</span></a>
-            </p>
-        </footer>
     </div>
 
 </body>
-
 
 <!-- Javascript for interacting with the button and progress bar -->
 
@@ -928,6 +922,17 @@ Please upload your firmware .bin file if possible.
             }
         }
     })();
+
+    document.getElementById('fileUploadBox').addEventListener('change', function() {
+        const fileNameSpan = document.getElementById('fileName');
+        if (this.files.length > 0) {
+            fileNameSpan.textContent = this.files[0].name;
+            fileNameSpan.style.color = 'var(--one-rom-gold)';
+        } else {
+            fileNameSpan.textContent = 'No file selected';
+            fileNameSpan.style.color = 'var(--text-secondary)';
+        }
+    });
 
 </script>
 
