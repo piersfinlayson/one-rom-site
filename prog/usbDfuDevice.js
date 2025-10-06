@@ -255,7 +255,8 @@ let usbDfuDevice = class {
     }
 
     // Function to connect, returning status as promise
-    async connect() {
+    // If forceSelect is true, always show device picker
+    async connect(forceSelect = false) {
 
         // First ensure WebUSB is available
         if (!navigator.usb) {
@@ -265,28 +266,63 @@ let usbDfuDevice = class {
         // Attempt to connect
         try {
 
-            // Request the device, filtering by ST-Micro's vendor ID
-            this.device = await navigator.usb.requestDevice({
-                filters: [{
-                    vendorId: 0x0483
-                }]
-            });
+            if (forceSelect) {
+                // Force device selection picker
+                this.device = await navigator.usb.requestDevice({
+                    filters: [{
+                        vendorId: 0x0483
+                    }]
+                });
+            } else {
+                // Check if we already have a paired device
+                const devices = await navigator.usb.getDevices();
+                const stmDevice = devices.find(device => device.vendorId === 0x0483);
 
-            // Open the device
-            await this.device.open();
+                if (stmDevice) {
+                    // Use previously authorized device
+                    this.device = stmDevice;
+                } else {
+                    // No paired device found, show picker
+                    this.device = await navigator.usb.requestDevice({
+                        filters: [{
+                            vendorId: 0x0483
+                        }]
+                    });
+                }
+            }
 
-            // Select configuration
-            await this.device.selectConfiguration(1);
-
-            // Claim interface
-            await this.device.claimInterface(0);
+            // Open the device if not already open
+            if (!this.device.opened) {
+                await this.device.open();
+                await this.device.selectConfiguration(1);
+                await this.device.claimInterface(0);
+            }
 
             // Print some info to the console
             console.log("Connected to device. Serial number: " +
                 this.device.serialNumber);
 
-            // Clear the current state. Needed after first connection or errors
-            await this.clearStatus();
+            // Try to get status first to see if device is already initialized
+            let needsClear = false;
+            let state;
+
+            try {
+                state = await this.getStatus();
+                
+                // If we're in an error state, we need to clear it
+                if (state == this.dfuState.STATE_ERROR) {
+                    needsClear = true;
+                }
+            } catch (error) {
+                // getStatus failed, device needs initialization
+                needsClear = true;
+            }
+
+            // Clear status if needed (either error state or uninitialized)
+            if (needsClear) {
+                await this.clearStatus();
+                await this.getStatus();
+            }
 
             // Done and return
             return Promise.resolve();
@@ -545,16 +581,16 @@ let usbDfuDevice = class {
             await this.program(fileArr);
 
             // Update the state
-            dfuStatusHandler("Done");
+            // dfuStatusHandler("Done");
 
             // Detach the device
-            await this.detach();
+            // await this.detach();
 
             // Update the state
-            dfuStatusHandler("Disconnecting");
+            // dfuStatusHandler("Disconnecting");
 
             // Disconnect
-            await this.disconnect();
+            // await this.disconnect();
 
             // Return success
             return Promise.resolve("Update Complete");
@@ -569,5 +605,105 @@ let usbDfuDevice = class {
             // Return the error
             return Promise.reject(error);
         }
+    }
+
+    // Function to read firmware from the device
+    async upload(length) {
+
+        // Clear the progress bar
+        dfuProgressHandler(0);
+
+        // Attempt to upload
+        try {
+
+            // Set the address pointer to 0x08000000 (The start of the flash)
+            await this.device.controlTransferOut({
+                requestType: 'class',
+                recipient: 'interface',
+                request: this.dfuRequest.DFU_DNLOAD,
+                value: 0, // wValue Should be 0 for command mode
+                index: 0
+            }, new Uint8Array([0x21, 0x00, 0x00, 0x00, 0x08]));
+
+            // Issue a get status to apply the operation
+            await this.getStatus();
+
+            // Check again if it was successful
+            await this.getStatus();
+
+            // Abort to return to dfuIDLE state before upload
+            await this.device.controlTransferOut({
+                requestType: 'class',
+                recipient: 'interface',
+                request: this.dfuRequest.DFU_ABORT,
+                value: 0,
+                index: 0
+            }, undefined);
+
+            // Calculate the total blocks to read. A block can be up to 2048 bytes
+            let totalBlocks = Math.ceil(length / 2048);
+
+            // Create buffer to hold the firmware data
+            let firmware = new Uint8Array(length);
+
+            // For every block
+            for (let block = 0; block < totalBlocks; block++) {
+
+                // Log the current block info to the console
+                console.log("Reading block " + (block + 1) + " of " + totalBlocks);
+
+                // Upload the block from the device
+                let result = await this.device.controlTransferIn({
+                    requestType: 'class',
+                    recipient: 'interface',
+                    request: this.dfuRequest.DFU_UPLOAD,
+                    value: 2 + block, // wValue should be the block number + 2
+                    index: 0
+                }, 2048); // Read 2048 bytes
+
+                // Copy the received data into the firmware buffer
+                let blockData = new Uint8Array(result.data.buffer);
+                let offset = block * 2048;
+                firmware.set(blockData, offset);
+
+                // Issue a get status to check the operation
+                await this.getStatus();
+
+                // Check again if it was successful
+                await this.getStatus();
+
+                // Work out the percentage done
+                let done = (100 / totalBlocks) * (block + 1);
+
+                // Update the progress bar
+                dfuProgressHandler(done);
+            }
+
+            // Issue abort command to return to dfuIDLE
+            await this.device.controlTransferOut({
+                requestType: 'class',
+                recipient: 'interface',
+                request: this.dfuRequest.DFU_ABORT,
+                value: 0,
+                index: 0
+            }, undefined);
+
+            // Wait for abort to complete and verify we're in dfuIDLE
+            await this.getStatus();
+
+            // Return the firmware data
+            return firmware;
+        }
+
+        // Catch errors
+        catch (error) {
+
+            // Log the error
+            console.error("Upload failed: " + error);
+
+            // Return the error
+            return Promise.reject(error);
+        }
+
     }
 }
