@@ -145,6 +145,10 @@ async function startUpdate() {
     connectProgramButton.disabled = true;
     connectBtn.disabled = true;
 
+    // Hide detected device info
+    document.getElementById('deviceSummary').classList.add('hidden');
+    document.getElementById('deviceDetails').classList.add('hidden');
+
     // Try to get the file and run the update sequence
     try {
 
