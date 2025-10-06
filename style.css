@@ -441,3 +441,65 @@ button.gold-button:hover {
 .hidden {
     display: none;
 }
+
+@media (max-width: 850px) {
+    body {
+        padding: 1rem 0.5rem;
+    }
+    
+    .app {
+        width: 95%;
+        padding: 1rem;
+    }
+    
+    /* Fix the floating image */
+    .app img[style*="float: right"] {
+        float: none !important;
+        max-width: min(300px, 100%) !important;
+        margin: 1rem 0 !important;
+        display: block;
+    }
+    
+    /* Header button stacking */
+    .app > div:first-child {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    h2, summary {
+        font-size: 1.25rem;
+    }
+    
+    /* Tab buttons */
+    .tab-button {
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Code blocks */
+    pre {
+        margin-left: 0;
+        margin-right: 0;
+        font-size: 12px;
+    }
+
+        footer {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    footer p {
+        margin: 0;
+    }
+    
+    /* Override the inline right alignment */
+    footer a[style*="text-align: right"] {
+        text-align: center !important;
+    }
+}
