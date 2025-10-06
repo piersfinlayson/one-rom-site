@@ -10,10 +10,10 @@
     <!-- SEO title & description -->
     <title>One ROM Programmer</title>
     <meta name="description" content="Programs the USB version of One ROM - the most flexible retro ROM replacement">
-    <link rel="canonical" href="https://onerom.org/usb/" />
+    <link rel="canonical" href="https://onerom.org/prog/" />
 
     <!-- Open Graph for social media -->
-    <meta property="og:url" content="https://onerom.org/usb/">
+    <meta property="og:url" content="https://onerom.org/prog/">
     <meta property="og:type" content="website">
     <meta property="og:title" content="One ROM Programmer | piers.rocks">
     <meta property="og:description" content="Programs the USB version of One ROM - the most flexible retro ROM replacement">
@@ -22,7 +22,7 @@
     <!-- Twitter Meta Tags -->
     <meta name="twitter:card" content="summary_large_image">
     <meta property="twitter:domain" content="onerom.org">
-    <meta property="twitter:url" content="https://onerom.org/usb/">
+    <meta property="twitter:url" content="https://onerom.org/prog/">
     <meta name="twitter:title" content="One ROM Programmer | piers.rocks">
     <meta name="twitter:description" content="Programs the USB version of One ROM - the most flexible retro ROM replacement">
     <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
@@ -37,9 +37,9 @@
     <div class="app">
 
         <!-- Title -->
-        <h1>One R<span class="o-in-rom">O</span>M USB Programmer</h1>
+        <h1>One R<span class="o-in-rom">O</span>M Programmer</h1>
         <p>
-            This page can be used to program One ROM USB, using <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser.  See <a href="#usage">Usage</a> for instructions.
+            Program One ROM USB using <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser. See <a href="#usage">Usage</a> for instructions.
         </p>
 
         <hr>
@@ -231,11 +231,11 @@
                     <ul><strong>Q: Why isn't my STM32 variant listed?</strong></ul>
                     <ul><strong>A:</strong> Pre-built images are available for the most commonly used STM32 variants.  You can build images for other variants using the <a href="https://github.com/piersfinlayson/one-rom">One ROM github repo</a>.</ul>
                     <ul><strong>Q: Can I use this with Firefox, Safari, or another non-Chromium browser?</strong></ul>
-                    <ul><strong>A:</strong> No, WebUSB, the technology behind this programmer, is only supported in Chromium based browsers like Chrome and Edge.</ul>
+                    <ul><strong>A:</strong> WebUSB, the technology behind this programmer, is only supported in Chromium based browsers like Chrome and Edge.</ul>
                     <ul><strong>Q: Can I use this on Linux or Mac?</strong></ul>
                     <ul><strong>A:</strong> Yes, but you must still use a Chromium based browser.</ul>
                     <ul><strong>Q: Can I use this with a non-USB version of One ROM?</strong></ul>
-                    <ul><strong>A:</strong> No, this programmer currently only works with the USB version of One ROM.</ul>
+                    <ul><strong>A:</strong> This programmer currently only works with the USB version of One ROM.</ul>
                     <ul><strong>Q: Can I use this to program other, non-One ROM, STM32 devices?</strong></ul>
                     <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on a generic STM32 DFU implementation, and its code is MIT licensed, so you are free to copy and modify it for your own purposes.</ul>
                     <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
@@ -294,10 +294,10 @@ sudo udevadm trigger</code></pre>
                 <ul>
                     <li>The page uses <a href="https://en.wikipedia.org/wiki/WebUSB" target="_blank">WebUSB</a> to access One ROM USB directly from your browser.</li>
                     <li>For security reasons, WebUSB is only available when this site is served over HTTPS (or from localhost) - you are recommended to use it at <a href="https://onerom.piers.rocks" target="_blank">https://onerom.piers.rocks</a>.  This version is built directly from the main branch of the One ROM github repository.</li>
-                    <li>Only the device you select when you hit "Program" can be accessed by this page's javascript code - your other USB devices are not visible to it.  None of your devices, including your chosen one, are visible to the server.</li>
-                    <li>The page's javascript code implements the STM32 DFU protocol, performing the necessary flash erase and programming operations on your One ROM USB.</li>
-                    <li>The firmware on your One ROM USB can only be updated when it is in DFU (Device Firmware Update) mode.  This is automatically enabled when you plug in One ROM to a USB host, like a PC, unless you have a completely "fresh from the factory" One ROM USB.</li>
-                    <li style="list-style-type: none;">If you have factory fresh One ROM USB, you need to manually put it into DFU mode before flashing, by jumping B0 and 3V3 on the underside of One ROM, while plugging it into USB.</li>
+                    <li>Only the device you select when you hit "Connect" or "Program" can be accessed by this page's javascript code - your other USB devices are not visible to it.  None of your devices, including your chosen one, are visible to the server.</li>
+                    <li>The page's javascript code implements the STM32 DFU protocol, performing the necessary flash load, erase and programming operations on your One ROM USB.</li>
+                    <li>The firmware on your One ROM USB can only be updated when it is in DFU (Device Firmware Update) mode.  This is automatically enabled when you plug in One ROM to a USB host, like a PC, unless you have a completely "fresh from the factory", or bricked, One ROM USB.</li>
+                    <li style="list-style-type: none;">If you have factory fresh, or bricked, One ROM USB, you need to manually put it into DFU mode before flashing, by jumping B0 and 3V3 on the underside of One ROM, while plugging it into USB.</li>
                     <li style="list-style-type: none;">One ROM's status LED is lit dimly when in DFU mode.</li>
                 </ul>
             </details>
@@ -310,8 +310,9 @@ sudo udevadm trigger</code></pre>
                     The One ROM Programmer is hosted and served by GitHub Pages.  It retrieves One ROM firmware manifest information from GitHub.  GitHub may log your browser details and IP address.
                 </p>
                 <p>
-                    Most of the site's functionality runs entirely in your browser, and no data is sent to the server:
+                    Most of the site's functionality runs entirely in your browser, and no personally identifiable data is stored by any server other than the GitHub pages server:
                     <ul>
+                        <li>When your browser loads this page, it tests whether a piers.rocks server is responding, and enables the pre-built image functionality if so.  The piers.rocks server logs your browser's User-Agent string (which typically includes your OS and browser version) and the firmware file being downloaded, but <strong>does not</strong> log any personally identifiable information like your IP address.</li>
                         <li>If you flash a pre-built image, the image is downloaded from GitHub via a piers.rocks server.  This is done to work around javasript limitations when retrieving GitHub release artifacts.  The piers.rocks server logs your browser's User-Agent string (which typically includes your OS and browser version) and the firmware file being downloaded, but <strong>does not</strong> log any personally identifiable information like your IP address.</li>
                         <li>If you flash a local file, it is read directly from your computer, and not sent to any server.</li>
                         <li>If you flash an image from a URL, the image is downloaded directly from that server by your browser.  That server may log your IP address and browser details, as any web server might.</li>
