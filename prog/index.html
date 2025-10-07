@@ -39,7 +39,7 @@
         <!-- Title -->
         <h1>One R<span class="o-in-rom">O</span>M Programmer</h1>
         <p>
-            Program One ROM USB using <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser. See <a href="#usage">Usage</a> for instructions.
+            Use <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser. See <a href="#usage">Usage</a> for instructions.
         </p>
 
         <hr>
@@ -240,6 +240,13 @@
                     <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on a generic STM32 DFU implementation, and its code is MIT licensed, so you are free to copy and modify it for your own purposes.</ul>
                     <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
                     <ul><strong>A:</strong> We have no idea - maybe if you are using Chrome. Let me us know via github if you get this working!</ul>
+                    <ul><strong>Q: Is my privacy protected?</strong></ul>
+                    <ul><strong>A:</strong> We do not collect any personal data. However, your browser may still send some information to the server, such as your IP address.</ul>
+                    <ul><strong>Q: Where can I find the source code for this programmer?</strong></ul>
+                    <ul><strong>A:</strong> The <a href="https://github.com/piersfinlayson/one-rom-site" target="_blank">github repo</a>.</ul>
+                    <ul><strong>Q: When I press "Connect" why does it sometimes read the One ROM twice?</strong></ul>
+                    <ul><strong>A:</strong> Firmware versions prior to v0.5.0 stored the ROM metadata in a different location on flash.  This tool attempts to read just the first 64KB (metadata location for v0.5.0+) and if the ROM metadata is not present, then re-reads the entire flash to find it.</ul>
+                </ul>
             </details>
         </div>
 
