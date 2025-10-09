@@ -39,6 +39,9 @@
         <!-- Title -->
         <h1>One R<span class="o-in-rom">O</span>M Programmer</h1>
         <p>
+            Works on Windows, Mac, Linux and Android.
+        </p>
+        <p>
             Use <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser. See <a href="#usage">Usage</a> for instructions.
         </p>
 
@@ -94,6 +97,7 @@
                 <button class="tab-button active" data-tab="prebuilt">Pre-built Image</button>
                 <button class="tab-button" data-tab="file">Local Image</button>
                 <button class="tab-button" data-tab="url">URL Image</button>
+                <button class="tab-button" data-tab="builder">Image Builder</button>
             </div>
 
             <div class="tab-content-container">
@@ -130,6 +134,14 @@
                         <label for="fileUploadBox" class="file-button">Choose Firmware File</label>
                         <span id="fileName" style="margin-left: 0.5rem; color: var(--text-secondary);">No file selected</span>
                         <input id="fileUploadBox" type="file" accept=".bin" style="display: none;">
+                    </div>
+
+                    <!-- Image Builder tab -->
+                    <div class="tab-input" data-tab="builder">
+                        <p>
+                            Coming soon - build your own custom ROM collections!
+                        </p>
+                        <p></p>
                     </div>
                     
                     <!-- Pre-built Images tab -->
@@ -191,10 +203,11 @@
                             <li><a href="#windows">Windows</a></li>
                             <li><a href="#linux">Linux</a></li>
                             <li>Mac - not required</li>
+                            <li>Android - not required</li>
                         </ul>
                     </li>
                     <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
-                    <li>Click the "Connect" button.  A popup will appear asking you to select a device. Select "STM32 BOOTLOADER" and click "Connect".</li>
+                    <li>Click the "Connect" button.  A popup will appear asking you to select a device. Select "STM32 BOOTLOADER" and click "Connect".  On Android you may receive another pop-up asking you to confirm the browser's USB access.</li>
                     <li>The device's current firmware will be read and analyzed, with information being displayed once complete.</li>
                     <li>Choose the firmware source: Pre-built, Local or URL.</li>
                     <li>Select the STM32 variant you are programming, and in the case of the pre-built image, your PCB revision and desired One ROM firmware version.  If an ONE ROM firmware was detected on the device you can use the values displayed.</li>
@@ -239,7 +252,7 @@
                     <ul><strong>Q: Can I use this to program other, non-One ROM, STM32 devices?</strong></ul>
                     <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on a generic STM32 DFU implementation, and its code is MIT licensed, so you are free to copy and modify it for your own purposes.</ul>
                     <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
-                    <ul><strong>A:</strong> We have no idea - maybe if you are using Chrome. Let me us know via github if you get this working!</ul>
+                    <ul><strong>A:</strong> Yes, on an Android device using Chrome.  The One ROM Programmer does not work on iPhone or iPad due to Apple's restrictive approach towards USB devices.</ul>
                     <ul><strong>Q: Is my privacy protected?</strong></ul>
                     <ul><strong>A:</strong> We do not collect any personal data. However, your browser may still send some information to the server, such as your IP address.</ul>
                     <ul><strong>Q: Where can I find the source code for this programmer?</strong></ul>

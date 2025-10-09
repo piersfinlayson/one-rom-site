@@ -658,6 +658,14 @@ tabButtons.forEach(button => {
             }
         });
         
+        // Hide/show program button and progress bar based on tab
+        const buttonsAndBar = document.querySelector('.firmware-section .buttons-and-bar');
+        if (targetTab === 'builder') {
+            buttonsAndBar.style.display = 'none';
+        } else {
+            buttonsAndBar.style.display = 'flex';
+        }
+        
         // Initialize prebuilt manager on first view
         if (targetTab === 'prebuilt' && PrebuiltManager.manifests.length === 0) {
             PrebuiltManager.init();
