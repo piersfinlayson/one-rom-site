@@ -313,7 +313,7 @@ sudo udevadm trigger</code></pre>
                 <summary id="technical">How It Works</summary>
                 <ul>
                     <li>The page uses <a href="https://en.wikipedia.org/wiki/WebUSB" target="_blank">WebUSB</a> to access One ROM USB directly from your browser.</li>
-                    <li>One ROM firmware parsing routines are run using <a href="https://wasm.onerom.org/">Web Assembly</a> directly within your browser.</li>
+                    <li>One ROM firmware parsing routines are run using <a href="https://wasm.onerom.org/" target="_blank">Web Assembly</a> directly within your browser.</li>
                     <li>For security reasons, WebUSB is only available when this site is served over HTTPS (or from localhost) - you are recommended to use it at <a href="https://onerom.org/prog/" target="_blank">https://onerom.org/prog/</a>.  This version is built directly from the main branch of the One ROM website's github repository, and served by GitHub.</li>
                     <li>Only the device you select when you hit "Connect" or "Program" can be accessed by this page's javascript code - your other USB devices are not visible to it.  None of your devices, including your chosen one, are visible to the server.</li>
                     <li>The page's javascript code implements the STM32 DFU protocol, performing the necessary flash load, erase and programming operations on your One ROM USB.</li>
