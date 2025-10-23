@@ -32,7 +32,10 @@
 
         <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
             <h1 style="margin-bottom: 0; border-bottom: none;">One R<span class="o-in-rom">O</span>M</h1>
-            <a href="/prog/" class="gold-button"><span class="michroma">Program One ROM →</span></a>
+            <div style="display: flex; gap: 1rem;">
+                <a href="/studio/" class="gold-button"><span class="michroma">Studio</span></a>
+                <a href="/web/" class="gold-button"><span class="michroma">Web</span></a>
+            </div>
         </div>
         
         <div style="display: flow-root;">
@@ -48,7 +51,13 @@
                 One ROM emulates the 2364, 2332, and 2316 ROMs used in systems like the Commodore 64, VIC-20, PET, 1541 disk drives, Atari 800XL, TI-99, CoCo2, and many more.
             </p>
             <p>
-                You can program the USB version using your <a href="/prog/">browser</a> using a PC, Mac, Linux or Android device.
+                <strong style="color: #ffb700;">✨NEW✨</strong>
+                <a href="/studio/" style="text-align: right;">One ROM Studio</a>
+                <span>is a comprehensive One ROM manager for Windows, Mac and Linux.</span>
+            </p>
+            <p>
+                <a href="/web/" style="text-align: right;">One ROM Web</a>
+                <span>is a browser-based tool to program One ROM USB, from any PC, Mac, Linux, or Android device.</span>
             </p>
         </div>
 
@@ -66,8 +75,26 @@
 
         <hr>
 
-        <div class="features">
+        <div class="getting-started">
             <details open>
+                <summary>Getting Started</summary>
+                <p>
+                    All versions of One ROM can be managed using <a href="/studio/">One ROM Studio</a>, which is available for Windows, Mac and Linux.
+                </p>
+                <p>
+                    If you have a One ROM USB device, program it directly from your browser using <a href="/web/">One ROM Web</a>.
+                </p>
+                <p>
+                    For building firmware from source, accessing hardware designs, and complete documentation, visit the <a href="https://github.com/piersfinlayson/one-rom" target="_blank">One ROM GitHub repository</a>. Pre-built firmware images for popular retro systems are available in the <a href ="https://github.com/piersfinlayson/one-rom/releases" target="_blank">releases section</a>.
+                </p>
+                <p>
+                    The repository includes detailed instructions for installation, programming, configuration options, and troubleshooting. You can also use <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a>, a companion project, for wireless programming and debugging.
+                </p>
+            </details>
+        </div>
+
+        <div class="features">
+            <details>
                 <summary>Key Features</summary>
                 <p>
                     One ROM fits the exact footprint of original ROM chip sockets without overhang. It can be manufactured for under $5 each in quantity using standard/basic two-layer PCB fabrication, with components on a single side.
@@ -121,7 +148,7 @@
             <details>
                 <summary>Technical Details</summary>
                 <p>
-                    One ROM firmware is written in C and hand-optimized assembly for performance.  The supporting tooling is primarily written in Rust using async. The web-based USB programmer uses a WebAssembly build of the same Rust-based tooling, combined with WebUSB and Javascript. This combination provides ROM emulation fast enough for vintage systems using low cost microcontrollers, adds an intuitive web-based programming interface, and is supported by a robust and flexible toolchain.
+                    One ROM firmware is written in C and hand-optimized assembly for performance.  The supporting tooling is primarily written in Rust using async. One ROM Web uses a WebAssembly build of the same Rust-based tooling, combined with WebUSB and Javascript. This combination provides ROM emulation fast enough for vintage systems using low cost microcontrollers, adds an intuitive web-based programming interface, and is supported by a robust and flexible toolchain.
                 </p>
                 <p>
                     Chip select lines are software-configurable (HIGH or LOW) without the need for hardware jumpers or different PCB designs required by other solutions.  A single One ROM can store multiple different ROM image types, including different chip select configurations, simultaneously.
@@ -147,21 +174,6 @@
             </details>
         </div>
 
-        <div class="getting-started">
-            <details>
-                <summary>Getting Started</summary>
-                <p>
-                    If you have a One ROM USB device, program it directly from your browser using the <a href="/prog/">Programmer</a>.
-                </p>
-                <p>
-                    For building firmware, accessing hardware designs, and complete documentation, visit the <a href="https://github.com/piersfinlayson/one-rom" target="_blank">One ROM GitHub repository</a>. Pre-built firmware images for popular retro systems are available in the <a href ="https://github.com/piersfinlayson/one-rom/releases" target="_blank">releases section</a>.
-                </p>
-                <p>
-                    The repository includes detailed instructions for installation, programming, configuration options, and troubleshooting. You can also use <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a>, a companion project, for wireless programming and debugging.
-                </p>
-            </details>
-        </div>
-
         <div class="open-source">
             <details>
                 <summary>Open Source</summary>
@@ -182,10 +194,10 @@
                 <summary>Coming Soon</summary>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start;">
                     <strong>One ROM Fire USB</strong>
-                    <span>Program the RP2350 version from the <a href="/prog/">Programmer</a></span>
+                    <span>Program the RP2350 version from <a href="/web/">One ROM Web</a></span>
 
                     <strong>Web Image Builder</strong>
-                    <span>Build and flash custom ROM collections from the <a href="/prog/">Programmer</a></span>
+                    <span>Build and flash custom ROM collections from <a href="/web/">One ROM Web</a></span>
 
                     <strong>One ROM 28</strong>
                     <span>New model to replace larger 28 pin ROMs including the 23128, 2764, 27128, 27256 and 27512</span>
@@ -208,8 +220,12 @@
                 <summary>Resources</summary>
                 <div style="display: grid; grid-template-columns: 24px auto 1fr; gap: 1rem; align-items: start;">
                     <img src="/images/favicon.png" alt="icon" width="24" height="24">
-                    <a href="/prog/">Programmer</a>
-                    <span>Program One ROM devices directly from your browser</span>
+                    <a href="/studio/">One ROM Studio</a>
+                    <span>Comprehensive One ROM manager for Windows, Mac and Linux</span>
+
+                    <img src="/images/favicon.png" alt="icon" width="24" height="24">
+                    <a href="/web/">One ROM Web</a>
+                    <span>Program One ROM USB from your browser</span>
                     
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
