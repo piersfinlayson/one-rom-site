@@ -26,6 +26,8 @@
     <meta name="twitter:title" content="One ROM Studio | piers.rocks">
     <meta name="twitter:description" content="Manage One ROMs - the most flexible retro ROM replacement">
     <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <script src="/js/studio/release.js" defer></script>
 </head>
 
 <!-- Page HTML content -->
@@ -51,89 +53,15 @@
         <details open>
             <summary id="downloads">Downloads</summary>
 
-            <table style="margin-top: 1.5rem; margin-left: auto; margin-right: auto; border-collapse: collapse;">
-                <tr>
-                    <td colspan="3" style="padding: 0.75rem 0;"><hr style="margin: 0;"></td>
-                </tr>
-
-                <tr>
-                    <td style="width: 48px; padding-right: 12px; vertical-align: middle;">
-                        <img src="images/win.svg" alt="Windows Logo" style="width: 36px; height: 36px;">
-                    </td>
-                    <td style="padding-right: 12px; vertical-align: middle; text-align: center;">
-                        <a href="https://images.onerom.org/studio/v0.1.0/onerom-studio_0.1.0_x64-setup.exe" class="file-button" style="margin-top: 0;">Windows x86 64-bit</a>
-                    </td>
-                    <td style="vertical-align: middle;">
-                        <code><span style="cursor: pointer; font-size: 1.5em;" onclick="navigator.clipboard.writeText('2d52ac2d481875403d884161db4c1234b7830dd7e6c5ca7368db1dc00eae113e')" title="Copy">📋</span> sha256: 2d52ac2d...</code>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <td colspan="3" style="padding: 0.75rem 0;"><hr style="margin: 0;"></td>
-                </tr>
-                
-                <tr>
-                    <td style="padding-right: 12px; vertical-align: middle;">
-                        <img src="images/apple.svg" alt="Apple Logo" style="width: 36px; height: 36px;">
-                    </td>
-                    <td style="padding-right: 12px; vertical-align: middle; text-align: center;">
-                        <a href="https://images.onerom.org/studio/v0.1.0/One%20ROM%20Studio_0.1.0_aarch64.dmg" class="file-button" style="margin-top: 0;">macOS (Apple Silicon)</a>
-                    </td>
-                    <td style="vertical-align: middle;">
-                        <code><span style="cursor: pointer; font-size: 1.5em;" onclick="navigator.clipboard.writeText('18c7c0f50f6c4d6bb09b39ab6446d00a19d0da2498feeb2c53c8f2189344fc0e')" title="Copy">📋</span> sha256: 18c7c0f5...</code>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <td style="padding-right: 12px; padding-top: 0.75rem; vertical-align: middle;">
-                        <img src="images/apple.svg" alt="Apple Logo" style="width: 36px; height: 36px;">
-                    </td>
-                    <td style="padding-right: 12px; padding-top: 0.75rem; vertical-align: middle; text-align: center;">
-                        <a href="https://images.onerom.org/studio/v0.1.0/One%20ROM%20Studio_0.1.0_x64.dmg" class="file-button" style="margin-top: 0;">macOS (Intel)</a>
-                    </td>
-                    <td style="padding-top: 0.75rem; vertical-align: middle;">
-                        <code><span style="cursor: pointer; font-size: 1.5em;" onclick="navigator.clipboard.writeText('cff0863a8975eb6e19a3ae588b9a4a78f52d4d91e75c7d0b2d26b0fa001c434c')" title="Copy">📋</span> sha256: cff0863a...</code>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <td colspan="3" style="padding: 0.75rem 0;"><hr style="margin: 0;"></td>
-                </tr>
-                
-                <tr>
-                    <td style="padding-right: 12px; vertical-align: middle;">
-                        <img src="images/Tux.svg" alt="Tux" style="width: 36px; height: 36px;">
-                    </td>
-                    <td style="padding-right: 12px; vertical-align: middle; text-align: center;">
-                        <a href="https://images.onerom.org/studio/v0.1.0/onerom-studio_0.1.0_amd64.deb" class="file-button" style="margin-top: 0;">Ubuntu/Debian x86 64-bit</a>
-                    </td>
-                    <td style="vertical-align: middle;">
-                        <code><span style="cursor: pointer; font-size: 1.5em;" onclick="navigator.clipboard.writeText('3f269e39460b595609ea87645aee05c9309469e5df9610120a1e9907053faaa0')" title="Copy">📋</span> sha256: 3f269e39...</code>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <td style="padding-right: 12px; padding-top: 0.75rem; vertical-align: middle;">
-                        <img src="images/Tux.svg" alt="Tux" style="width: 36px; height: 36px;">
-                    </td>
-                    <td style="padding-right: 12px; padding-top: 0.75rem; vertical-align: middle; text-align: center;">
-                        <a href="https://images.onerom.org/studio/v0.1.0/onerom-studio_0.1.0_arm64.deb" class="file-button" style="margin-top: 0;">Ubuntu/Debian/Pi ARM 64-bit</a>
-                    </td>
-                    <td style="padding-top: 0.75rem; vertical-align: middle;">
-                        <code><span style="cursor: pointer; font-size: 1.5em;" onclick="navigator.clipboard.writeText('fd21458c7c96f1c8c46dd0e978d6c1e60d113d63910121083d5c0c77e921a620')" title="Copy">📋</span> sha256: fd21458c...</code>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td colspan="3" style="padding: 0.75rem 0;"><hr style="margin: 0;"></td>
-                </tr>
-            </table>
+            <div id="downloads-table">
+                <p>Loading release information...</p>
+            </div>
 
             <p>
                 Current versions of One ROM Studio are unsigned.  This means that you may need to bypass your OS's security warnings to install and run it.
             </p>
             <ul>
-                <li>On Windows, when presented with a "Windows protected your PC", click "More info" &gt; "Run anyway".</li>
+                <li>On Windows, when presented with a "Windows protected your PC", click "More info" &gt; "Run anyway". Windows may also decide to quarantine the app due to false positive trojan detections.</li>
                 <li>On Mac, when presented with a "cannot be opened because the developer cannot be verified" warning, go to System Preferences &gt; Security &amp; Privacy, then click "Open Anyway".</li>
             </ul>
 
