@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ROM Type Visualizer</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        /* ROM Visualizer specific styles only */
+        :root {
+            --ic-body-color: #1a1a1a;
+            --ic-notch-color: #1a1a1a;
+            --pin-color: var(--one-rom-gold-darker);
+            --pin-nc-color: var(--button-disabled-color);
+            --pin-hover-color: var(--one-rom-gold);
+        }
+
+        .visualization {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem 1rem;
+        }
+
+        #rom-svg {
+            max-width: 100%;
+            transform: scale(1);
+            height: auto;
+        }
+
+        .pin {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pin:hover .pin-rect {
+            fill: var(--pin-hover-color);
+        }
+
+        .pin.nc {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        .pin.nc:hover .pin-rect {
+            fill: var(--pin-nc-color);
+        }
+
+        .tooltip {
+            position: fixed;
+            background: var(--input-bg-color);
+            color: var(--text-secondary);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 20px;
+            pointer-events: none;
+            z-index: 1000;
+            white-space: nowrap;
+            display: none;
+        }
+
+        .tooltip.visible {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        #info-panel .info-row {
+            display: inline;
+            margin-right: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <h1>One R<span class="o-in-rom">O</span>M Visualizer</h1>
+        
+        <div>
+            <label for="rom-select">ROM Type:</label>
+            <select id="rom-select">
+                <option value="">Select a ROM type...</option>
+            </select>
+        </div>
+
+        <div id="info-panel" class="info-summary" style="display: none; margin-top: 3rem;">
+            <div class="info-row">
+                <span class="info-label">Size:</span>
+                <span id="info-size">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Package:</span>
+                <span id="info-package">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Address Lines:</span>
+                <span id="info-addr-lines">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Data Lines:</span>
+                <span id="info-data-lines">-</span>
+            </div>
+        </div>
+
+        <hr style="margin-top: 3rem;">
+
+        <div class="visualization">
+            <div id="loading" class="loading">Select a ROM type to visualize</div>
+            <svg id="rom-svg" style="display: none;"></svg>
+        </div>
+
+        <div id="footer"></div>
+        <script src="/js/site/footer.js"></script>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script type="module">
+        // Configuration - doubled in size
+        const CONFIG = {
+            pinWidth: 24,
+            pinHeight: 30,
+            pinSpacing: 45,
+            bodyWidth: 180,
+            notchRadius: 22.5,
+            notchDepth: 15,
+            hPadding: 90,
+            vPadding: 0,
+            shortenBy: 45,
+            
+            colors: {
+                body: 'var(--ic-body-color)',
+                notch: 'var(--ic-notch-color)',
+                pin: 'var(--pin-color)',
+                pinNC: 'var(--pin-nc-color)',
+            }
+        };
+
+        let wasmModule = null;
+
+        // Initialize WASM module
+        async function loadWasm() {
+            try {
+                // Adjust path to your WASM module
+                const module = await import('https://wasm.onerom.org/pkg/onerom_wasm.js');
+                await module.default();
+                wasmModule = module;
+                console.log('WASM loaded successfully');
+                return true;
+            } catch (error) {
+                console.error('Failed to load WASM:', error);
+                showError('Failed to load WASM module. Check console for details.');
+                return false;
+            }
+        }
+
+        // Populate ROM type dropdown
+        function populateRomTypes() {
+            const select = document.getElementById('rom-select');
+            const romTypes = wasmModule.rom_types();
+            
+            romTypes.forEach(romType => {
+                const option = document.createElement('option');
+                option.value = romType;
+                option.textContent = romType;
+                select.appendChild(option);
+            });
+        }
+
+        // Get ROM type info from WASM
+        function getRomInfo(romType) {
+            try {
+                return wasmModule.rom_type_info(romType);
+            } catch (error) {
+                console.error('Failed to get ROM info:', error);
+                showError(`Failed to get info for ROM type: ${romType}`);
+                return null;
+            }
+        }
+
+        // Calculate pin assignments
+        function calculatePinMap(romInfo) {
+            const pinMap = new Map();
+            const totalPins = romInfo.rom_pins;
+
+            // Mark all pins as NC initially
+            for (let i = 1; i <= totalPins; i++) {
+                pinMap.set(i, { type: 'nc', name: 'NC', line: null });
+            }
+
+            // Address pins
+            romInfo.address_pins.forEach(ap => {
+                pinMap.set(ap.pin, { type: 'address', name: `A${ap.line}`, line: ap.line });
+            });
+
+            // Data pins
+            romInfo.data_pins.forEach(dp => {
+                pinMap.set(dp.pin, { type: 'data', name: `D${dp.line}`, line: dp.line });
+            });
+
+            // Control lines
+            romInfo.control_lines.forEach(cl => {
+                const name = cl.name.toUpperCase();
+                pinMap.set(cl.pin, { 
+                    type: 'control', 
+                    name: name,
+                    configurable: cl.configurable 
+                });
+            });
+
+            // Programming pins
+            if (romInfo.programming_pins) {
+                romInfo.programming_pins.forEach(pp => {
+                    const name = pp.name.toUpperCase();
+                    pinMap.set(pp.pin, { 
+                        type: 'programming', 
+                        name: name,
+                        readState: pp.read_state 
+                    });
+                });
+            }
+
+            // Power pins
+            romInfo.power_pins.forEach(pp => {
+                const name = pp.name.toUpperCase();
+                pinMap.set(pp.pin, { type: 'power', name: name });
+            });
+
+            return pinMap;
+        }
+
+        // Create SVG visualization
+        function createRomVisualization(romInfo) {
+            const svg = document.getElementById('rom-svg');
+            const pinMap = calculatePinMap(romInfo);
+            const totalPins = romInfo.rom_pins;
+            const pinsPerSide = totalPins / 2;
+
+            // Calculate dimensions
+            const icHeight = (pinsPerSide * CONFIG.pinSpacing) + CONFIG.pinSpacing - CONFIG.shortenBy;
+            const totalWidth = (CONFIG.bodyWidth + CONFIG.pinWidth * 2 + CONFIG.hPadding * 2);
+            const totalHeight = icHeight + CONFIG.vPadding * 2;
+
+            svg.setAttribute('viewBox', `0 0 ${totalWidth} ${totalHeight}`);
+            svg.setAttribute('width', totalWidth);
+            svg.setAttribute('height', totalHeight);
+            
+            // Clear previous content
+            svg.innerHTML = '';
+
+            // Group for the entire IC
+            const icGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            icGroup.setAttribute('transform', `translate(${CONFIG.hPadding}, ${CONFIG.vPadding})`);
+            svg.appendChild(icGroup);
+
+            // IC body with notch cutout
+            const bodyPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const bodyX = CONFIG.pinWidth;
+            const bodyY = 0;
+            const notchCenterX = bodyX + CONFIG.bodyWidth / 2;
+            
+            // Create path with notch cut into the top
+            const pathData = `
+                M ${bodyX} ${bodyY}
+                L ${notchCenterX - CONFIG.notchRadius} ${bodyY}
+                A ${CONFIG.notchRadius} ${CONFIG.notchRadius} 0 0 0 ${notchCenterX + CONFIG.notchRadius} ${bodyY}
+                L ${bodyX + CONFIG.bodyWidth} ${bodyY}
+                L ${bodyX + CONFIG.bodyWidth} ${bodyY + icHeight}
+                L ${bodyX} ${bodyY + icHeight}
+                Z
+            `;
+            
+            bodyPath.setAttribute('d', pathData);
+            bodyPath.setAttribute('fill', CONFIG.colors.body);
+            bodyPath.setAttribute('stroke', '#000');
+            bodyPath.setAttribute('stroke-width', '2');
+            icGroup.appendChild(bodyPath);
+
+            // Draw pins
+            for (let i = 1; i <= totalPins; i++) {
+                const pinInfo = pinMap.get(i);
+                const isLeftSide = i <= pinsPerSide;
+                const pinIndex = isLeftSide ? i - 1 : totalPins - i;
+                
+                const pinY = CONFIG.pinSpacing - (CONFIG.shortenBy / 2) + (pinIndex * CONFIG.pinSpacing);
+                const pinX = isLeftSide ? (CONFIG.pinWidth / 2) : (CONFIG.pinWidth / 2) + CONFIG.bodyWidth;
+
+                drawPin(icGroup, i, pinX, pinY, isLeftSide, pinInfo, totalPins);
+            }
+
+            return svg;
+        }
+
+        // Draw individual pin
+        function drawPin(parent, pinNumber, x, y, isLeftSide, pinInfo, totalPins) {
+            const pinGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            pinGroup.classList.add('pin');
+            if (pinInfo.type === 'nc') {
+                pinGroup.classList.add('nc');
+            }
+            pinGroup.setAttribute('data-pin', pinNumber);
+            pinGroup.setAttribute('data-type', pinInfo.type);
+            pinGroup.setAttribute('data-name', pinInfo.name);
+
+            // Pin rectangle
+            const pinRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            pinRect.classList.add('pin-rect');
+            pinRect.setAttribute('x', x);
+            pinRect.setAttribute('y', y - CONFIG.pinHeight / 2);
+            pinRect.setAttribute('width', CONFIG.pinWidth);
+            pinRect.setAttribute('height', CONFIG.pinHeight);
+            pinRect.setAttribute('fill', pinInfo.type === 'nc' ? CONFIG.colors.pinNC : CONFIG.colors.pin);
+            pinRect.setAttribute('stroke', '#000');
+            pinRect.setAttribute('stroke-width', '1');
+            pinGroup.appendChild(pinRect);
+
+            // Pin number (inside)
+            const pinNumText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            pinNumText.setAttribute('x', isLeftSide ? x + CONFIG.pinWidth + 10 : x - 10);
+            pinNumText.setAttribute('y', y);
+            pinNumText.setAttribute('text-anchor', isLeftSide ? 'start' : 'end');
+            pinNumText.setAttribute('dominant-baseline', 'middle');
+            pinNumText.setAttribute('font-size', '22');
+            pinNumText.setAttribute('fill', 'var(--text-secondary)');
+            pinNumText.textContent = pinNumber;
+            pinGroup.appendChild(pinNumText);
+
+            // Pin name (inside IC body)
+            const pinNameText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            pinNameText.setAttribute('x', isLeftSide ? x - 10 : x + CONFIG.pinWidth + 10);
+            pinNameText.setAttribute('y', y);
+            pinNameText.setAttribute('text-anchor', isLeftSide ? 'end' : 'start');
+            pinNameText.setAttribute('dominant-baseline', 'middle');
+            pinNameText.setAttribute('font-size', '22');
+            pinNameText.setAttribute('font-weight', 'bold');
+            pinNameText.setAttribute('fill', 'var(--text-color)');
+            pinNameText.textContent = pinInfo.name;
+            pinGroup.appendChild(pinNameText);
+
+            parent.appendChild(pinGroup);
+
+            // Add interactivity
+            pinGroup.addEventListener('mouseenter', (e) => showTooltip(e, pinNumber, pinInfo, totalPins));
+            pinGroup.addEventListener('mousemove', (e) => updateTooltipPosition(e, pinNumber, totalPins));
+            pinGroup.addEventListener('mouseleave', hideTooltip);
+        }
+
+        // Tooltip functions
+        function showTooltip(event, pinNumber, pinInfo, totalPins) {
+            const tooltip = document.getElementById('tooltip');
+            let content = `Pin ${pinNumber}: ${pinInfo.name}`;
+            
+            if (pinInfo.type === 'address') {
+                content += ` (Address Line ${pinInfo.line})`;
+            } else if (pinInfo.type === 'data') {
+                content += ` (Data Line ${pinInfo.line})`;
+            } else if (pinInfo.type === 'control') {
+                content += pinInfo.configurable ? ' (Configurable)' : ' (Fixed Active-Low)';
+            } else if (pinInfo.type === 'programming') {
+                content += ` (Read: ${pinInfo.readState})`;
+            }
+            
+            tooltip.textContent = content;
+            tooltip.classList.add('visible');
+            updateTooltipPosition(event, pinNumber, totalPins);
+        }
+
+        function updateTooltipPosition(event, pinNumber, totalPins) {
+            const tooltip = document.getElementById('tooltip');
+            const isLeftSide = pinNumber <= (totalPins / 2);
+
+            // Left pins: tooltip to the left, right pins: tooltip to the right
+            const xOffset = isLeftSide ? -tooltip.offsetWidth - 15 : 15;
+
+            tooltip.style.left = (event.clientX + xOffset) + 'px';
+            tooltip.style.top = (event.clientY + 15) + 'px';
+        }
+
+        function hideTooltip() {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.classList.remove('visible');
+        }
+
+        // Update info panel
+        function updateInfoPanel(romInfo) {
+            document.getElementById('info-size').textContent = 
+                `${romInfo.size_bytes} bytes (${romInfo.size_bytes / 1024}KB)`;
+            document.getElementById('info-package').textContent = 
+                `DIP-${romInfo.rom_pins}`;
+            document.getElementById('info-addr-lines').textContent = 
+                romInfo.num_addr_lines;
+            document.getElementById('info-data-lines').textContent = 
+                romInfo.data_pins.length;
+            
+            document.getElementById('info-panel').style.display = 'block';
+        }
+
+        // Show error message
+        function showError(message) {
+            const app = document.querySelector('.app');
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'background: #fee; color: #c33; padding: 15px; border-radius: 4px; margin: 20px 0;';
+            errorDiv.textContent = message;
+            app.insertBefore(errorDiv, app.firstChild);
+            
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+
+        // Handle ROM selection
+        function handleRomSelection(event) {
+            const romType = event.target.value;
+            if (!romType) return;
+
+            const romInfo = getRomInfo(romType);
+            if (!romInfo) return;
+
+            // Hide loading, show visualization
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('rom-svg').style.display = 'block';
+
+            // Update UI
+            updateInfoPanel(romInfo);
+            createRomVisualization(romInfo);
+        }
+
+        // Initialize application
+        async function init() {
+            const loaded = await loadWasm();
+            if (!loaded) return;
+
+            populateRomTypes();
+            
+            // Set up event listeners
+            document.getElementById('rom-select').addEventListener('change', handleRomSelection);
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>
