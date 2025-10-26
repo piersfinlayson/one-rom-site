@@ -110,7 +110,7 @@
             </div>
         </div>
 
-        <hr style="margin-top: 3rem;">
+        <hr style="margin-top: 3rem; margin-bottom: 2rem;">
 
         <div class="visualization">
             <div id="loading" class="loading">Select a ROM type to visualize</div>
@@ -124,12 +124,12 @@
     <div id="tooltip" class="tooltip"></div>
 
     <script type="module">
-        // Configuration - doubled in size
+        // Configuration
         const CONFIG = {
             pinWidth: 24,
             pinHeight: 30,
             pinSpacing: 45,
-            bodyWidth: 180,
+            bodyWidth: 256,  // Width set to achieve X/Y ration or original DIP-24
             notchRadius: 22.5,
             notchDepth: 15,
             hPadding: 90,
@@ -283,6 +283,22 @@
             bodyPath.setAttribute('stroke', '#000');
             bodyPath.setAttribute('stroke-width', '2');
             icGroup.appendChild(bodyPath);
+
+            // Add chip model text (rotated 90° anticlockwise)
+            const chipText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            const textX = bodyX + CONFIG.bodyWidth / 2;
+            const textY = bodyY + icHeight / 2;
+            chipText.setAttribute('x', textX);
+            chipText.setAttribute('y', textY);
+            chipText.setAttribute('transform', `rotate(-90, ${textX}, ${textY})`);
+            chipText.setAttribute('text-anchor', 'middle');
+            chipText.setAttribute('dominant-baseline', 'middle');
+            chipText.setAttribute('font-family', 'monospace');
+            chipText.setAttribute('font-size', '64');
+            chipText.setAttribute('font-weight', 'bold');
+            chipText.setAttribute('fill', 'var(--text-secondary)');
+            chipText.textContent = romInfo.name;
+            icGroup.appendChild(chipText);
 
             // Draw pins
             for (let i = 1; i <= totalPins; i++) {
