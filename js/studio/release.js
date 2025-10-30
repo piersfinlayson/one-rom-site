@@ -16,15 +16,10 @@
                 logoAlt: 'Windows Logo',
                 label: 'Windows x86 64-bit'
             },
-            'aarch64-apple-darwin': {
+            'universal-apple-darwin': {
                 logo: 'images/apple.svg',
                 logoAlt: 'Apple Logo',
-                label: 'macOS (Apple Silicon)'
-            },
-            'x86_64-apple-darwin': {
-                logo: 'images/apple.svg',
-                logoAlt: 'Apple Logo',
-                label: 'macOS (Intel)'
+                label: 'macOS'
             },
             'x86_64-unknown-linux-gnu': {
                 logo: 'images/Tux.svg',
@@ -41,8 +36,7 @@
         // Build rows
         const targets = [
             'x86_64-pc-windows-msvc',
-            'aarch64-apple-darwin',
-            'x86_64-apple-darwin',
+            'universal-apple-darwin',
             'x86_64-unknown-linux-gnu',
             'aarch64-unknown-linux-gnu'
         ];
