@@ -14,7 +14,7 @@
             'x86_64-pc-windows-msvc': {
                 logo: 'images/win.svg',
                 logoAlt: 'Windows Logo',
-                label: 'Windows x86 64-bit'
+                label: 'Windows x86<br>64-bit'
             },
             'universal-apple-darwin': {
                 logo: 'images/apple.svg',
@@ -24,12 +24,12 @@
             'x86_64-unknown-linux-gnu': {
                 logo: 'images/Tux.svg',
                 logoAlt: 'Tux',
-                label: 'Ubuntu/Debian x86 64-bit'
+                label: 'Ubuntu/Debian<br>x86 64-bit'
             },
             'aarch64-unknown-linux-gnu': {
                 logo: 'images/Tux.svg',
                 logoAlt: 'Tux',
-                label: 'Ubuntu/Debian/Pi ARM 64-bit'
+                label: 'Ubuntu/Debian/Pi<br>ARM 64-bit'
             }
         };
         
@@ -60,7 +60,7 @@
             if (rows) {
                 rows += `
                 <tr>
-                    <td colspan="3" style="padding: 0.75rem 0;"><hr style="margin: 0;"></td>
+                    <td colspan="4" style="padding: 1rem 0.5rem;"><hr style="margin: 0;"></td>
                 </tr>`;
             }
             
@@ -72,8 +72,9 @@
                     <td style="width: 48px; padding-right: 12px;${paddingStyle} vertical-align: middle;">
                         <img src="${info.logo}" alt="${info.logoAlt}" style="width: 36px; height: 36px;">
                     </td>
-                    <td style="padding-right: 12px;${paddingStyle} vertical-align: middle; text-align: center;">
-                        <a href="${url}" class="file-button" style="margin-top: 0;">${info.label}</a>
+                    <td style="width: 1px; padding-right: 12px;${paddingStyle} vertical-align: middle; text-align: center; color: var(--one-rom-gold);">V${version}</td>
+                    <td style="padding-right: 12px;${paddingStyle} vertical-align: middle; text-align: center">
+                        <a href="${url}" class="file-button" style="margin-top: 0; width: 150px; display: inline-block; min-height: 3em; display: flex; align-items: center; justify-content: center;">${info.label}</a>
                     </td>
                     <td style="${paddingStyle} vertical-align: middle;">
                         <code><span style="cursor: pointer; font-size: 1.5em;" onclick="navigator.clipboard.writeText('${platform.sha256}')" title="Copy">📋</span> sha256: ${shortHash}...</code>
