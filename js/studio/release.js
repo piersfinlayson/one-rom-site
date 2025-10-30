@@ -14,7 +14,7 @@
             'x86_64-pc-windows-msvc': {
                 logo: 'images/win.svg',
                 logoAlt: 'Windows Logo',
-                label: 'Windows x86<br>64-bit'
+                label: 'Windows<br>x86 64-bit'
             },
             'universal-apple-darwin': {
                 logo: 'images/apple.svg',
