@@ -10,7 +10,7 @@ let wasmInitialized = false;
 let parse_firmware;
 
 (async function() {
-    const wasm = await import('https://wasm.onerom.org/releases/v0.1.4/pkg/onerom_wasm.js');
+    const wasm = await import('https://wasm.onerom.org/releases/v0.1.5/pkg/onerom_wasm.js');
     await wasm.default();
     parse_firmware = wasm.parse_firmware;
     wasmInitialized = true;
