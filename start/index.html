@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>One ROM - The Most Flexible Retro ROM Replacement</title>
+    <meta name="description" content="The most flexible retro ROM replacement - open source hardware and software.">
+    <link rel="canonical" href="https://onerom.org/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One ROM - The Most Flexible Retro ROM Replacement">
+    <meta property="og:description" content="The most flexible retro ROM replacement - open source hardware and software.">
+    <meta property="og:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://onerom.org/">
+    <meta name="twitter:title" content="One ROM - The Most Flexible Retro ROM Replacement">
+    <meta name="twitter:description" content="The most flexible retro ROM replacement - open source hardware and software.">
+    <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
+</head>
+
+<body>
+    <div class="app">
+
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
+            <h1 style="margin-bottom: 0; border-bottom: none;">Getting Started</h1>
+            <div style="display: flex; gap: 1rem;">
+                <a href="/studio/" class="gold-button"><span class="michroma">Studio</span></a>
+                <a href="/web/" class="gold-button"><span class="michroma">Web</span></a>
+            </div>
+        </div>
+
+        <div>
+            <h2>Programming Options</h2>
+
+            <div style="display: grid; grid-template-columns: auto auto 1fr; gap: 1rem; align-items: start;">
+                <div>💿</div>
+                <div><a href="/studio/">One ROM Studio</a></div>
+                <div>A native desktop application for Windows, macOS and Linux.<br>This is the best option for most users.</div>
+
+                <div>🌐</div>
+                <div><a href="/web/">One ROM Web</a></div>
+                <div>A web-based application that works in Chrome-based browsers on Windows, macOS, Linux and Android.</div>
+
+                <div>💻</div>
+                <div><a href="#building-from-source">Building from source</a></div>
+                <div>For advanced users who prefer to build and program One ROM manually, using a terminal.</div>
+            </div>
+        </div>
+
+        <hr>
+
+        <div>
+            <h2>One ROM Hardware</h2>
+            <h3>
+                Models
+            </h3>
+            <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
+                <strong style="text-align: right;">Ice ❄️</strong>
+                <span>Powered by an STM32F4 microcontroller. Often comes with an <strong>F411RE</strong> MCU, but other variants are available.</span>
+                <strong style="text-align: right;">Fire 🔥</strong>
+                <span>Powered by a Raspberry Pi RP2350 microcontroller.</span>
+            </div>
+            <h3>
+                Programming
+            </h3>
+            <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
+                <strong style="text-align: right;">USB 🔌</strong>
+                <span>Includes a micro USB connector. Programmed using <a href="/studio/">One ROM Studio</a> or <a href="/web/">One ROM Web</a>.</span>
+
+                <strong style="text-align: right;">Pro 💪</strong>
+                <span>Programming using an SWD programmer connected to its programming pins. Programmed using <a href="/studio/">One ROM Studio</a>.</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <div>
+            <h2>USB Programming</h2>
+            <p>
+                Some setup may be required on your computer the first time you program a One ROM via USB:
+            </p>
+            <p></p>
+
+            <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
+            <strong style="text-align: right;">Windows</strong>
+            <span>
+                You must install a USB driver so that your computer can communicate with the One ROM device.  This is done using <a href="https://zadig.akeo.ie/">Zadig</a>.  See <a href="/web/index.html#windows">here</a> for instructions. 
+            </span>
+
+            <strong style="text-align: right;">macOS</strong>
+            <span>Requires no special setup.</span>
+
+            <strong style="text-align: right;">Linux</strong>
+            <span>
+                If you are using <a href="/studio/">One ROM Studio</a> then no additional setup should be required.
+                <br>
+                If using <a href="/web/">One ROM Web</a> then you may need to set up a udev rule to allow access to the One ROM device.  You may also need to allow your browser to access USB devices.  See <a href="/web/index.html#linux">here</a>. 
+            </span>
+
+            <strong style="text-align: right;">Android</strong>
+            <span>
+                Requires no special setup, but you must use a Chrome-based browser and a USB OTG adapter cable to connect the One ROM device to your Android device.
+            </span>
+
+            </div>
+        </div>
+
+        <hr>
+
+        <div>
+            <h2>Pro (SWD) Programming</h2>
+            <p>
+                For One ROM Pro, you need an SWD programmer, also known as a debug programmer, to program the One ROM device.
+            </p>
+            <p>
+                Raspberry Pi's <a href="https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html">Debug Probe</a> has excellent compatibility with both One ROM Fire and Ice.  You can also use a standard <a href="https://github.com/piersfinlayson/one-rom/blob/main/docs/PI-PICO-PROGRAMMER.md">Raspberry Pi Pico</a> as an SWD programmer.
+            </p>
+            <p>
+                Alternatively, many other SWD programmers are available.  A generic CMSIS-DAP or DAPLink programmer from one of the usual online marketplaces should work and only cost a few dollars. You can also use <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a>, a companion project, for wireless programming and debugging.
+            </p>
+            <p>
+                You must connect the CLK, DIO and GND pins from the programmer to the corresponding pins on One ROM.  See <a href="https://github.com/piersfinlayson/one-rom/blob/main/docs/GETTING-STARTED.md">this document</a> for indentifying the pins on your One ROM.
+            </p>
+            <p>
+                You will also need to power One ROM with 5V to program it.  This can be done by connecting the 5V pin from the programmer (if it has one) to the 5V pin on One ROM.  Alternatively, you can install One ROM in a retro system and power it on for programming.
+            </p>
+            <p>
+                <strong>Always ensure One ROM is correctly oriented when installing in your retro system - incorrect orientation can damage One ROM or your retro system.</strong>
+            </p>
+        </div>
+
+        <hr>
+
+        <div>
+            <h2>ROM Images</h2>
+            <p>
+                One ROM can be programmed with a collection of 2316, 2332 and 2364 ROM images.
+            </p>
+            <p>
+                <a href="/web/">One ROM Web</a> allows you to select from a curated collections of popular ROM images for various retro systems.
+            </p>
+            <p>
+                As well as these pre-defined collections, <a href="/studio/">One ROM Studio</a> allows you to build your own collections and program those to One ROM, using a JSON configuration file.  See <a href="https://github.com/piersfinlayson/one-rom/blob/main/rom-config/sample.json">this sample config</a>.
+            </p>
+        </div>
+
+        <hr>
+
+        <div>
+            <h2>Selecting Images</h2>
+            <p>
+                One ROM offers flexible and powerful options for selecting between ROM images at boot time, selecting between them dynamcally (while the system is running), and also serving multiple ROM sockets simultaneously from a single One ROM socket.
+            </p>
+            <p>
+                To use this capability, you will need to use the header pins on One ROM.  These are located between pins 1 and 24 of the device.  If they are not populated with pins, you will need to solder standard 0.1"/2.54mm pitch header pins. 
+            </p>
+            <p>
+                For instructions on how to use the header pins for image selection, see <a href="https://github.com/piersfinlayson/one-rom/blob/main/docs/GETTING-STARTED.md#image-selection">here</a>.  Note that different One ROM revisions may use different pins.
+            </p>
+            <p>
+                If you are programming a single ROM image, you do not need to use the header pins.
+            </p>
+        </div>
+
+        <hr>
+
+        <div id="building-from-source">
+            <h2>Building From Source</h2>
+            <p>
+                Full instructions for building and flashing One ROM from source are provided in the <a href="https://github.com/piersfinlayson/one-rom">One ROM GitHub repo</a>. Start with <a href="https://github.com/piersfinlayson/one-rom/blob/main/INSTALL.md">INSTALL.md</a>.
+            </p>
+        </div>
+
+        <div id="footer"></div>
+        <script src="/js/site/footer.js"></script>
+
+    </div>
+
+</body>
+
+</html>

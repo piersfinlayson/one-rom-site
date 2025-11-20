@@ -201,8 +201,8 @@
         <hr>
 
         <div class="usage">
-            <details>
-                <summary id="usage">Usage</summary>
+            <details id="usage">
+                <summary>Usage</summary>
                 <ol>
                     <li>First time setup:
                         <ul>
@@ -227,8 +227,8 @@
         </div>
 
         <div class="problems">
-            <details>
-                <summary id="problems">Problems</summary>
+            <details id="problems">
+                <summary>Problems</summary>
                 <p>
                     If you encounter any issues using this programmer, <a href="#" id="githubIssueLink1" target="_blank">raise a GitHub issue</a>.
                 </p>
@@ -236,8 +236,8 @@
         </div>
 
         <div class="faq">
-            <details>
-                <summary id="faq">FAQ</summary>
+            <details id="faq">
+                <summary>FAQ</summary>
                 <ul>
                     <ul><strong>Q: What if I hit problems?</strong></ul>
                     <ul><strong>A:</strong> <a href="#" id="githubIssueLink" target="_blank">Raise a GitHub issue</a>.</ul>
@@ -270,8 +270,8 @@
         </div>
 
         <div class="windows">
-            <details>
-                <summary id="windows">Windows Setup</summary>
+            <details id="windows">
+                <summary>Windows Setup</summary>
                 <ol>
                     <li>Download and install <a href="https://zadig.akeo.ie/" target="_blank">Zadig</a>.</li>
                     <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB, jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
@@ -293,8 +293,8 @@
         </div>
 
         <div class="linux">
-            <details>
-                <summary id="linux">Linux Setup</summary>
+            <details id="linux">
+                <summary>Linux Setup</summary>
                 <ol>
                     <li>
                         Create a file called <code>/etc/udev/rules.d/51-one-rom.rules</code> with the following content:
@@ -315,8 +315,8 @@ sudo udevadm trigger</code></pre>
         </div>
 
         <div class="technical">
-            <details>
-                <summary id="technical">How It Works</summary>
+            <details id="technical">
+                <summary>How It Works</summary>
                 <ul>
                     <li>The page uses <a href="https://en.wikipedia.org/wiki/WebUSB" target="_blank">WebUSB</a> to access One ROM USB directly from your browser.</li>
                     <li>One ROM firmware parsing routines are run using <a href="https://wasm.onerom.org/" target="_blank">Web Assembly</a> directly within your browser.</li>
@@ -331,8 +331,8 @@ sudo udevadm trigger</code></pre>
         </div>
 
         <div class="privacy">
-            <details>
-                <summary id="privacy">Privacy</summary>
+            <details id="privacy">
+                <summary>Privacy</summary>
                 <p>
                     One ROM Web is hosted and served by GitHub Pages.  It retrieves One ROM firmware manifest information from GitHub.  GitHub may log your browser details and IP address.
                 </p>
@@ -360,5 +360,23 @@ sudo udevadm trigger</code></pre>
 
 <!-- Programmer Javascript -->
 <script src="/js/prog/programmer.js"></script>
+
+<script>
+// On page load, open details if hash matches
+if (window.location.hash) {
+  const target = document.querySelector(window.location.hash);
+  if (target && target.tagName === 'DETAILS') {
+    target.open = true;
+  }
+}
+
+// Handle hash changes (if user clicks another link)
+window.addEventListener('hashchange', () => {
+  const target = document.querySelector(window.location.hash);
+  if (target && target.tagName === 'DETAILS') {
+    target.open = true;
+  }
+});
+</script>
 
 </html>

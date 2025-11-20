@@ -33,8 +33,7 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
             <h1 style="margin-bottom: 0; border-bottom: none;">One R<span class="o-in-rom">O</span>M</h1>
             <div style="display: flex; gap: 1rem;">
-                <a href="/studio/" class="gold-button"><span class="michroma">Studio</span></a>
-                <a href="/web/" class="gold-button"><span class="michroma">Web</span></a>
+                <a href="/start/" class="gold-button"><span class="michroma">Getting Started</span></a>
             </div>
         </div>
         
@@ -75,26 +74,8 @@
 
         <hr>
 
-        <div class="getting-started">
-            <details open>
-                <summary>Getting Started</summary>
-                <p>
-                    All versions of One ROM can be managed using <a href="/studio/">One ROM Studio</a>, which is available for Windows, Mac and Linux.
-                </p>
-                <p>
-                    If you have a One ROM USB device, program it directly from your browser using <a href="/web/">One ROM Web</a>.
-                </p>
-                <p>
-                    For building firmware from source, accessing hardware designs, and complete documentation, visit the <a href="https://github.com/piersfinlayson/one-rom" target="_blank">One ROM GitHub repository</a>. Pre-built firmware images for popular retro systems are available in the <a href ="https://github.com/piersfinlayson/one-rom/releases" target="_blank">releases section</a>.
-                </p>
-                <p>
-                    The repository includes detailed instructions for installation, programming, configuration options, and troubleshooting. You can also use <a href="https://piers.rocks/u/airfrog" target="_blank">Airfrog</a>, a companion project, for wireless programming and debugging.
-                </p>
-            </details>
-        </div>
-
         <div class="features">
-            <details>
+            <details open>
                 <summary>Key Features</summary>
                 <p>
                     One ROM fits the exact footprint of original ROM chip sockets without overhang. It can be manufactured for under $5 each in quantity using standard/basic two-layer PCB fabrication, with components on a single side.
@@ -115,10 +96,10 @@
                 <h3>Models</h3>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
                     <strong>Ice ❄️</strong>
-                    <span>Powered by an STM32F4* microcontroller. Most robust as it has absolute maximum voltage rating of 7.3V. All core features, such as multiple ROM images, dynamic image switching, and replacing multiple ROMs with a single One ROM are all supported. Only has a single CPU core, so can support fewer advanced run-time features than Fire.</span>
+                    <span>Powered by an STM32F4* microcontroller. All core features, such as multiple ROM images, dynamic image switching, and replacing multiple ROMs with a single One ROM are all supported. Only has a single CPU core, so can support fewer advanced run-time features than Fire.</span>
 
                     <strong>Fire 🔥</strong>
-                    <span>Powered by an RP2350 microcontroller. Has a more powerful, dual core, processor so can support more advanced run-time features than Ice. Less tolerant of misbehaving host systems, as its absolute maximum voltage rating is 5.5V.</span>
+                    <span>Powered by an RP2350 microcontroller. Has a more powerful, dual core, processor so can support more advanced run-time features than Ice.</span>
                 </div>
                 <p>
                     (*) Ice can be built with many different models of the STM32F4 microcontroller, offering different flash sizes, performance levels and cost.
