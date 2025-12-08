@@ -260,7 +260,7 @@
                     <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
                     <ul><strong>A:</strong> Yes, on an Android device using Chrome.  One ROM Web does not work on iPhone or iPad due to Apple's restrictive approach towards USB devices.</ul>
                     <ul><strong>Q: Is my privacy protected?</strong></ul>
-                    <ul><strong>A:</strong> We do not collect any personal data. However, your browser may still send some information to the server, such as your IP address.</ul>
+                    <ul><strong>A:</strong> We do not collect any personal data. We use <a href="https://www.goatcounter.com/" target="_blank">GoatCounter</a> for privacy-friendly analytics.</ul>
                     <ul><strong>Q: Where can I find the source code for this programmer?</strong></ul>
                     <ul><strong>A:</strong> The <a href="https://github.com/piersfinlayson/one-rom-site" target="_blank">github repo</a>.</ul>
                     <ul><strong>Q: When I press "Connect" why does it sometimes read the One ROM twice?</strong></ul>
@@ -343,6 +343,7 @@ sudo udevadm trigger</code></pre>
                         <li>If you flash a pre-built image, the image is downloaded from GitHub via a piers.rocks server.  This is done to work around javasript limitations when retrieving GitHub release artifacts.  The piers.rocks server logs your browser's User-Agent string (which typically includes your OS and browser version) and the firmware file being downloaded, but <strong>does not</strong> log any personally identifiable information like your IP address.</li>
                         <li>If you flash a local file, it is read directly from your computer, and not sent to any server.</li>
                         <li>If you flash an image from a URL, the image is downloaded directly from that server by your browser.  That server may log your IP address and browser details, as any web server might.</li>
+                        <li>The site uses <a href="https://www.goatcounter.com/" target="_blank">GoatCounter</a> for privacy-friendly analytics.</li>
                     </ul>
                 </p>
                 <p>
@@ -378,5 +379,7 @@ window.addEventListener('hashchange', () => {
   }
 });
 </script>
+
+<script data-goatcounter="https://analytics.piers.rocks/count" async src="//analytics.piers.rocks/count.js"></script>
 
 </html>
