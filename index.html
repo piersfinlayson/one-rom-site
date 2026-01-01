@@ -47,7 +47,7 @@
                 It is based on a sub-$2 microcontroller and all of its software and hardware is completely open source.  Boards can be fabbed for under $10 each in small quantities, or under $5 each in larger quantities. 
             </p>
             <p>
-                One ROM emulates the 2364, 2332, and 2316 ROMs used in systems like the Commodore 64, VIC-20, PET, 1541 disk drives, Atari 800XL, TI-99, CoCo2, and many more.
+                One ROM emulates the 24-pin 2364/2332/2316/2732/2716 ROMs used in systems like the Commodore 64, VIC-20, PET, 1541 disk drives, Atari 800XL, TI-99, CoCo2, and many more.  It also emulates 27512/27256/27128/2764/23512/23256/23128 28-pin ROMs used in systems like the BBC Micro and Master, later C64s and many more.
             </p>
             <p>
                 <strong style="color: #ffb700;">✨NEW✨</strong>
@@ -81,10 +81,10 @@
                     One ROM fits the exact footprint of original ROM chip sockets without overhang. It can be manufactured for under $5 each in quantity using standard/basic two-layer PCB fabrication, with components on a single side.
                 </p>
                 <p>
-                    A single One ROM can replace multiple original ROMs simultaneously - for example, all three ROMs in a Commodore 64 (BASIC, KERNAL, and character set). It stores up to 16 different ROM images, selectable via jumpers, and supports dynamic bank switching to change ROM images on the fly, while the host system is running.
+                    A single One ROM can replace multiple original ROMs simultaneously - for example, all three ROMs in a Commodore 64 (BASIC, KERNAL, and character set). It can store multiple different ROM images, selectable via jumpers, and supports dynamic bank switching to change ROM images on the fly, while the host system is running.
                 </p>
                 <p>
-                    Programming is quick and simple. The USB variant allows programming directly from your browser in 10s with no separate programmer required. Alternatively, with the Pro version, connect 4 wires and run a single command. A $5 Raspberry Pi Pico works as a programmer for the pro version, and One ROM can be reflashed in-circuit without removal from the host system, avoiding wear on the ROM and the socket. 
+                    Programming is quick and simple. The USB variant allows programming directly from your browser in 10 seconds with no separate programmer required. Alternatively, with the Pro version, connect 4 wires and run a single command. A $5 Raspberry Pi Pico works as a programmer for the pro version, and One ROM can be reflashed in-circuit without removal from the host system, avoiding wear on the ROM and the socket. 
                 </p>
             </details>
         </div>
@@ -147,7 +147,7 @@
             <details>
                 <summary>Supported Retro Systems</summary>
                 <p>
-                    One ROM has been tested and works with Commodore 64, VIC-20, various PET models, 1541 disk drives, IEEE drives, Atari 800XL, TI-99 and CoCo2. Pre-built firmware configurations are available for these systems.
+                    One ROM has been tested and works with Commodore 64, VIC-20, various PET models, 1541 disk drives, IEEE drives, BBC Micro and Master, Apple II, Atari 800XL, TI-99 and CoCo2. Pre-built firmware configurations are available for these systems.
                 </p>
                 <p>
                     It is highly likely that One ROM works in other systems - please post in <a href="https://github.com/piersfinlayson/one-rom/discussions/31" target="_blank">this discussion</a> if you get One ROM working in your retro system(s).  If you hit problems, <a href="https://github.com/piersfinlayson/one-rom/issues/new/choose" target="_blank">open an issue</a>.
@@ -177,14 +177,8 @@
             <details>
                 <summary>Coming Soon</summary>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start;">
-                    <strong>One ROM Fire USB</strong>
-                    <span>Program the RP2350 version from <a href="/web/">One ROM Web</a></span>
-
                     <strong>Web Image Builder</strong>
                     <span>Build and flash custom ROM collections from <a href="/web/">One ROM Web</a></span>
-
-                    <strong>One ROM 28</strong>
-                    <span>New model to replace larger 28 pin ROMs including the 23128, 2764, 27128, 27256 and 27512</span>
                 </div>
             </details>
         </div>
@@ -193,9 +187,8 @@
             <details>
                 <summary>Project History</summary>
                 <p>
-                    One ROM was formerly known as Software Defined Retro ROM (SDRR). The project started with STM32F4 microcontrollers and later expanded to include the Raspberry Pi RP2350 when the A4 stepping was released.
+                    One ROM was formerly known as Software Defined Retro ROM (SDRR). The project started with STM32F4 microcontrollers replacing 24 pin ROMs, and later expanded to include the Raspberry Pi RP2350 when the A4 stepping was released, and also 28 pin ROMs.
                 </p>
-
             </details>
         </div>
 
