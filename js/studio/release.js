@@ -16,6 +16,11 @@
                 logoAlt: 'Windows Logo',
                 label: 'Windows<br>x86 64-bit'
             },
+            'aarch64-pc-windows-msvc': {
+                logo: 'images/win.svg',
+                logoAlt: 'Windows Logo',
+                label: 'Windows<br>ARM 64-bit'
+            },
             'universal-apple-darwin': {
                 logo: 'images/apple.svg',
                 logoAlt: 'Apple Logo',
@@ -36,6 +41,7 @@
         // Build rows
         const targets = [
             'x86_64-pc-windows-msvc',
+            'aarch64-pc-windows-msvc',
             'universal-apple-darwin',
             'x86_64-unknown-linux-gnu',
             'aarch64-unknown-linux-gnu'
