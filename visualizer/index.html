@@ -150,7 +150,7 @@
         async function loadWasm() {
             try {
                 // Adjust path to your WASM module
-                const module = await import('https://wasm.onerom.org/releases/v0.1.8/pkg/onerom_wasm.js');
+                const module = await import('https://wasm.onerom.org/releases/v0.2.0/pkg/onerom_wasm.js');
                 await module.default();
                 wasmModule = module;
                 console.log('WASM loaded successfully');
