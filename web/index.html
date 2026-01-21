@@ -319,11 +319,11 @@
                         </ul>
                     </li>
                     <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
-                    <li>Click the "Connect" button.  A popup will appear asking you to select a device. Select "STM32 BOOTLOADER" and click "Connect".  On Android you may receive another pop-up asking you to confirm the browser's USB access.</li>
+                    <li>Click the "Connect" button.  A popup will appear asking you to select a device. Select "RP2350 Boot" (Fire) or "STM32 BOOTLOADER" (Ice) and click "Connect".  On Android you may receive another pop-up asking you to confirm the browser's USB access.</li>
                     <li>The device's current firmware will be read and analyzed, with information being displayed once complete.</li>
-                    <li>Choose the firmware source: Pre-built, Local or URL.</li>
-                    <li>Select the STM32 variant you are programming, and in the case of the pre-built image, your PCB revision and desired One ROM firmware version.  If an ONE ROM firmware was detected on the device you can use the values displayed.</li>
-                    <li>Choose a pre-built config, select a local file, or enter the URL of the One ROM .bin file to program.</li>
+                    <li>Choose the firmware source: Pre-built, Custom, Local or URL.</li>
+                    <li>(Ice only) Select the MCU variant you are programming, and in the case of the pre-built image, your PCB revision and desired One ROM firmware version.  If an ONE ROM firmware was detected on the device you can use the values displayed.  On Fire, RP2350 will be pre-selected.</li>
+                    <li>Choose a pre-built config, upload and configure the ROM image, select a local firmware file, or enter the URL of the firmware file to program.</li>
                     <li>Click the "Program" button.</li>
                     <li>The button text will change to "Erasing". Wait for this to complete.</li>
                     <li>The button text will change to "Programming". Wait for this to complete.</li>
@@ -362,7 +362,7 @@
                     <ul><strong>Q: Can I use this with a non-USB version of One ROM?</strong></ul>
                     <ul><strong>A:</strong> This programmer currently only works with the USB version of One ROM.</ul>
                     <ul><strong>Q: Can I use this to program other, non-One ROM, STM32 devices?</strong></ul>
-                    <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on a generic STM32 DFU implementation, and its code is MIT licensed, so you are free to copy and modify it for your own purposes.</ul>
+                    <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on generic STM32 DFU and RP2350 PICOBOOT implementations, and the code is MIT licensed, so you are free to copy and modify it for your own purposes.  For the RP2040/RP2350 see <a href="https://picoflash.org" target="_blank">picoflash.org</a>, which is a generic implementation.</ul>
                     <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
                     <ul><strong>A:</strong> Yes, on an Android device using Chrome.  One ROM Web does not work on iPhone or iPad due to Apple's restrictive approach towards USB devices.</ul>
                     <ul><strong>Q: Is my privacy protected?</strong></ul>
@@ -378,6 +378,7 @@
         <div class="windows">
             <details id="windows">
                 <summary>Windows Setup</summary>
+                <p>These steps should not be required for Fire boards.</p>
                 <ol>
                     <li>Download and install <a href="https://zadig.akeo.ie/" target="_blank">Zadig</a>.</li>
                     <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB, jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
@@ -405,6 +406,7 @@
                     <li>
                         Create a file called <code>/etc/udev/rules.d/51-one-rom.rules</code> with the following content:
                         <pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", MODE="0666"</code></pre>
+                        <pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", MODE="0666"</code></pre>
                     </li>
                     <li>
                         Then run:
@@ -425,13 +427,13 @@ sudo udevadm trigger</code></pre>
                 <summary>How It Works</summary>
                 <ul>
                     <li>The page uses <a href="https://en.wikipedia.org/wiki/WebUSB" target="_blank">WebUSB</a> to access One ROM USB directly from your browser.</li>
-                    <li>One ROM firmware parsing routines are run using <a href="https://wasm.onerom.org/" target="_blank">Web Assembly</a> directly within your browser.</li>
+                    <li>One ROM firmware parsing and building routines are run using <a href="https://wasm.onerom.org/" target="_blank">Web Assembly</a> directly within your browser.</li>
                     <li>For security reasons, WebUSB is only available when this site is served over HTTPS (or from localhost) - you are recommended to use it at <a href="https://onerom.org/web/" target="_blank">https://onerom.org/web/</a>.  This version is built directly from the main branch of the One ROM website's github repository, and served by GitHub.</li>
                     <li>Only the device you select when you hit "Connect" or "Program" can be accessed by this page's javascript code - your other USB devices are not visible to it.  None of your devices, including your chosen one, are visible to the server.</li>
-                    <li>The page's javascript code implements the STM32 DFU protocol, performing the necessary flash load, erase and programming operations on your One ROM USB.</li>
-                    <li>The firmware on your One ROM USB can only be updated when it is in DFU (Device Firmware Update) mode.  This is automatically enabled when you plug in One ROM to a USB host, like a PC, unless you have a completely "fresh from the factory", or bricked, One ROM USB.</li>
-                    <li style="list-style-type: none;">If you have factory fresh, or bricked, One ROM USB, you need to manually put it into DFU mode before flashing, by jumping B0 and 3V3 on the underside of One ROM, while plugging it into USB.</li>
-                    <li style="list-style-type: none;">One ROM's status LED is lit dimly when in DFU mode.</li>
+                    <li>The page's javascript code implements the STM32 DFU and RP2350 PICOBOOT protocols, performing the necessary flash load, erase and programming operations on your One ROM USB.</li>
+                    <li>The firmware on your One ROM USB can only be updated when it is in programming mode.  This is automatically enabled when you plug in One ROM to a USB host, like a PC, unless you have a completely "fresh from the factory", or bricked, One ROM USB.</li>
+                    <li style="list-style-type: none;">If you have factory fresh, or bricked, One ROM USB, you need to manually put it into programming mode before flashing, by jumping B0 and 3V3 (Ice) or B and GND (Fire) on the underside of One ROM, while plugging it into USB.</li>
+                    <li style="list-style-type: none;">One ROM's status LED is lit dimly when in programming mode.</li>
                 </ul>
             </details>
         </div>

@@ -820,9 +820,16 @@ const CustomImageManager = {
             mcuSelect.appendChild(option);
         });
         mcuSelect.disabled = false;
-        
-        // Reset downstream
-        this.resetSelect('customVersionSelect');
+
+    
+        // Auto-select MCU if only one option available
+        if (mcus.length === 1) {
+            mcuSelect.value = mcus[0].value;
+            await this.onMcuChange(mcus[0].value);
+        } else {
+            // Reset downstream
+            this.resetSelect('customVersionSelect');
+        }
         this.updateRomTypes();
         this.updateBuildButton();
     },
@@ -1260,6 +1267,13 @@ document.getElementById('hwRevSelect')?.addEventListener('change', function() {
     const model = document.getElementById('modelSelect').value;
     if (this.value && model) {
         PrebuiltManager.filterByHwRev(model, this.value);
+
+        // Auto-select MCU if only one option available
+        const mcuSelect = document.getElementById('mcuSelectPrebuilt');
+        if (mcuSelect.options.length === 2) { // placeholder + one option
+            mcuSelect.selectedIndex = 1;
+            mcuSelect.dispatchEvent(new Event('change'));
+        }
     }
     updateProgramButtonForCurrentTab();
 });
