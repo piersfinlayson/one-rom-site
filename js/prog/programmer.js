@@ -706,10 +706,7 @@ tabButtons.forEach(button => {
         
         // Initialize prebuilt manager if pre-built tab is active on load
         if (activeTab === 'prebuilt') {
-            PrebuiltManager.init().then(() => {
-                // Auto-select Ice and trigger cascade
-                PrebuiltManager.initializeModelSelector();
-            });
+            PrebuiltManager.init();
         }
     }
 })();
