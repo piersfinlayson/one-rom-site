@@ -2,6 +2,12 @@
 //
 // MIT License
 
+// At the very top of programmer.js, after the copyright header
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.2.0/pkg/onerom_wasm.js';
+const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
+const FIRMWARE_SIZE = 48 * 1024;  // 48KB
+const MAX_METADATA_LEN = 16 * 1024;  // 16KB
+
 // Create a USB dfu device object
 let dfu = new UnifiedProgrammer();
 
@@ -10,7 +16,7 @@ let wasmInitialized = false;
 let parse_firmware;
 
 (async function() {
-    const wasm = await import('https://wasm.onerom.org/releases/v0.2.0/pkg/onerom_wasm.js');
+    const wasm = await import(ONEROM_WASM_URL);
     await wasm.default();
     parse_firmware = wasm.parse_firmware;
     wasmInitialized = true;
@@ -225,7 +231,17 @@ async function startUpdate() {
             
             // Convert MCU format from manifest (lowercase like "f446rc") to validation format (uppercase like "F446RC")
             mcuVariant = PrebuiltManager.selectedArtifact.mcu.toUpperCase();
+
+        } else if (activeTab === 'custom') {
+            // Custom Image tab: Use built firmware
+        
+            if (!CustomImageManager.builtFirmware) {
+                throw ("Error: No firmware built");
+            }
             
+            fileArr = CustomImageManager.builtFirmware.buffer;
+            mcuVariant = CustomImageManager.selectedMcu;
+    
         } else {
             throw ("Error: No firmware source provided");
         }
@@ -245,10 +261,21 @@ async function startUpdate() {
             // Update Connect button to Reconnect
             document.getElementById('connectBtn').textContent = 'Reconnect';
 
+            // Show success message, then reset after 2 seconds
+            dfuStatusHandler('Complete!');
+            setTimeout(() => {
+                dfuStatusHandler('Program');
+            }, 2000);
         } catch (error) {
             console.log("Failed to auto-refresh device info: " + error);
 
             setTimeout(() => alert("One ROM USB Programming completed, but failed to read back device info"), 100);
+
+            // Show success message, then reset after 2 seconds (even on error)
+            dfuStatusHandler('Complete!');
+            setTimeout(() => {
+                dfuStatusHandler('Program');
+            }, 2000);
         }
 
     }
@@ -436,6 +463,8 @@ const PrebuiltManager = {
     },
     
     filterByModel(model) {
+        this.selectedArtifact = null;
+
         const hwRevSelect = document.getElementById('hwRevSelect');
         hwRevSelect.innerHTML = '<option value="">Select ...</option>';
         hwRevSelect.disabled = false;
@@ -480,6 +509,8 @@ const PrebuiltManager = {
     },
     
     filterByHwRev(model, hwRev) {
+        this.selectedArtifact = null;
+        
         const mcuSelect = document.getElementById('mcuSelectPrebuilt');
         mcuSelect.innerHTML = '<option value="">Select...</option>';
         mcuSelect.disabled = false;
@@ -506,6 +537,8 @@ const PrebuiltManager = {
     },
     
     filterByMcu(model, hwRev, mcu) {
+        this.selectedArtifact = null;
+
         const versionSelect = document.getElementById('versionSelect');
         versionSelect.innerHTML = '<option value="">Select...</option>';
         versionSelect.disabled = false;
@@ -532,6 +565,8 @@ const PrebuiltManager = {
     },
     
     filterByVersion(model, hwRev, mcu, version) {
+        this.selectedArtifact = null;
+        
         const romConfigSelect = document.getElementById('romConfigSelect');
         romConfigSelect.innerHTML = '<option value="">Select...</option>';
         romConfigSelect.disabled = false;
@@ -571,6 +606,8 @@ const PrebuiltManager = {
                 descDiv.classList.add('visible');
             }
         }
+
+        updateProgramButtonForCurrentTab();
     },
     
     resetSelector(id) {
@@ -619,11 +656,604 @@ const PrebuiltManager = {
     }
 };
 
+// Custom Image Manager
+const CustomImageManager = {
+    wasmInitialized: false,
+    wasm: null,
+    romFile: null,
+    romFileName: null,
+    builtFirmware: null,
+    selectedBoard: null,
+    selectedMcu: null,
+    excludedRomTypes: [], // Global exclude list (empty for now)
+    
+    async init() {
+        if (this.wasmInitialized) return;
+        
+        try {
+            // Import WASM
+            this.wasm = await import(ONEROM_WASM_URL);
+            await this.wasm.default();
+            this.wasmInitialized = true;
+            
+            // Populate Model dropdown
+            const models = ['Ice', 'Fire'];
+            const modelSelect = document.getElementById('customModelSelect');
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                modelSelect.appendChild(option);
+            });
+            
+            // Setup event listeners
+            this.setupEventListeners();
+            
+        } catch (error) {
+            console.error('Error initializing Custom Image Manager:', error);
+            alert('Failed to initialize Custom Image Builder: ' + error.message);
+        }
+    },
+    
+    setupEventListeners() {
+        // Model selection
+        document.getElementById('customModelSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.onModelChange(e.target.value);
+            } else {
+                this.updateBuildButton();
+            }
+        });
+        
+        // PCB selection
+        document.getElementById('customPcbSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.onPcbChange(e.target.value);
+            } else {
+                this.updateBuildButton();
+            }
+        });
+        
+        // MCU selection
+        document.getElementById('customMcuSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.onMcuChange(e.target.value);
+            } else {
+                this.updateBuildButton();
+            }
+        });
+        
+        // Firmware version selection
+        document.getElementById('customVersionSelect').addEventListener('change', () => {
+            this.updateBuildButton();
+        });
+        
+        // ROM file upload
+        document.getElementById('customRomFile').addEventListener('change', async (e) => {
+            await this.onRomFileChange(e);
+        });
+        
+        // ROM type selection
+        document.getElementById('customRomTypeSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.onRomTypeChange(e.target.value);
+            } else {
+                this.updateBuildButton();
+            }
+        });
+        
+        // CS selections
+        ['customCs1Select', 'customCs2Select', 'customCs3Select'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                this.updateBuildButton();
+            });
+        });
+        
+        // Build button
+        document.getElementById('customBuildBtn').addEventListener('click', async () => {
+            await this.buildFirmware();
+        });
+        
+        // Save button
+        document.getElementById('customSaveBtn').addEventListener('click', () => {
+            this.saveFirmware();
+        });
+    },
+    
+    async onModelChange(model) {
+        // Get family from model
+        const family = model === 'Fire' ? 'RP2350' : 'STM32F4';
+        
+        // Get boards for this family
+        const boards = this.wasm.boards_for_mcu_family(family);
+        
+            
+        // Filter to only boards with USB support
+        const usbBoards = boards.filter(board => {
+            const boardInfo = this.wasm.board_info(board.value);
+            return boardInfo.has_usb === true;
+        });
+        
+        // Sort alphabetically by display name (after removing "USB ")
+        usbBoards.sort((a, b) => {
+            const nameA = a.pretty.replace('USB ', '');
+            const nameB = b.pretty.replace('USB ', '');
+            return nameA.localeCompare(nameB);
+        });
+
+        // Populate PCB dropdown.  Pretty name needs USB removing
+        const pcbSelect = document.getElementById('customPcbSelect');
+        pcbSelect.innerHTML = '<option value="">Select...</option>';
+        usbBoards.forEach(board => {
+            const option = document.createElement('option');
+            option.value = board.value;
+            option.textContent = board.pretty.replace('USB ','');
+            pcbSelect.appendChild(option);
+        });
+        pcbSelect.disabled = false;
+        
+        // Reset downstream
+        this.resetSelect('customMcuSelect');
+        this.resetSelect('customVersionSelect');
+        this.resetSelect('customRomTypeSelect');
+        this.hideCs();
+        this.updateBuildButton();
+    },
+    
+    async onPcbChange(boardName) {
+        this.selectedBoard = boardName;
+        
+        // Get board info
+        const boardInfo = this.wasm.board_info(boardName);
+        const family = boardInfo.mcu_family;
+        
+        // Get MCUs for this family
+        const mcus = this.wasm.mcus_for_mcu_family(family);
+        
+        // Populate MCU dropdown
+        const mcuSelect = document.getElementById('customMcuSelect');
+        mcuSelect.innerHTML = '<option value="">Select...</option>';
+        mcus.forEach(mcu => {
+            const option = document.createElement('option');
+            option.value = mcu.value;
+            option.textContent = mcu.pretty;
+            mcuSelect.appendChild(option);
+        });
+        mcuSelect.disabled = false;
+        
+        // Reset downstream
+        this.resetSelect('customVersionSelect');
+        this.updateRomTypes();
+        this.updateBuildButton();
+    },
+    
+    async onMcuChange(mcuVariant) {
+        this.selectedMcu = mcuVariant;
+        
+        // Fetch firmware versions from releases.json
+        try {
+            const response = await fetch(ONEROM_RELEASES_MANIFEST_URL);
+            const data = await response.json();
+            
+            // Filter compatible versions
+            const board = this.selectedBoard.toLowerCase();
+            const mcu = mcuVariant.toLowerCase();
+            
+            const compatible = data.releases.filter(release => {
+                const boardData = release.boards.find(b => b.name === board);
+                if (!boardData) return false;
+                return boardData.mcus.some(m => m.name === mcu);
+            }).map(r => r.version);
+            
+            // Populate version dropdown
+            const versionSelect = document.getElementById('customVersionSelect');
+            versionSelect.innerHTML = '<option value="">Select...</option>';
+            compatible.forEach(version => {
+                const option = document.createElement('option');
+                option.value = version;
+                option.textContent = `v${version}`;
+                versionSelect.appendChild(option);
+            });
+            
+            // Default to latest if available
+            if (compatible.includes(data.latest)) {
+                versionSelect.value = data.latest;
+            }
+            
+            versionSelect.disabled = false;
+            
+        } catch (error) {
+            console.error('Error fetching firmware versions:', error);
+            alert('Failed to fetch firmware versions');
+        }
+        
+        this.updateBuildButton();
+    },
+    
+    async onRomFileChange(e) {
+        const file = e.target.files[0];
+        const fileNameSpan = document.getElementById('customRomFileName');
+        
+        if (!file) {
+            this.romFile = null;
+            this.romFileName = null;
+            fileNameSpan.textContent = 'No file selected';
+            fileNameSpan.classList.remove('selected');
+            this.resetSelect('customRomTypeSelect');
+            this.updateBuildButton();
+            return;
+        }
+        
+        this.romFileName = file.name;
+        this.romFile = new Uint8Array(await file.arrayBuffer());
+        
+        fileNameSpan.textContent = file.name;
+        fileNameSpan.classList.add('selected');
+        
+        // Enable ROM type selection
+        if (this.selectedBoard) {
+            this.updateRomTypes();
+        }
+        
+        this.updateBuildButton();
+    },
+    
+    updateRomTypes() {
+        if (!this.selectedBoard || !this.romFile) {
+            this.resetSelect('customRomTypeSelect');
+            return;
+        }
+        
+        // Get board ROM pins
+        const boardInfo = this.wasm.board_info(this.selectedBoard);
+        const boardRomPins = boardInfo.rom_pins;
+        
+        // Get all ROM types
+        const allRomTypes = this.wasm.rom_types();
+        
+        // Filter by matching pin count and not in exclude list
+        const compatibleTypes = allRomTypes.filter(romType => {
+            if (this.excludedRomTypes.includes(romType)) return false;
+            const romInfo = this.wasm.rom_type_info(romType);
+            return romInfo.rom_pins === boardRomPins;
+        });
+        
+        // Populate ROM type dropdown
+        const romTypeSelect = document.getElementById('customRomTypeSelect');
+        romTypeSelect.innerHTML = '<option value="">Select...</option>';
+        compatibleTypes.forEach(romType => {
+            const option = document.createElement('option');
+            option.value = romType;
+            option.textContent = romType;
+            romTypeSelect.appendChild(option);
+        });
+        romTypeSelect.disabled = false;
+    },
+    
+    onRomTypeChange(romType) {
+        // Get ROM type info to check for CS lines
+        const romInfo = this.wasm.rom_type_info(romType);
+        
+        // Hide all CS rows first
+        this.hideCs();
+        
+        // Show CS rows based on control lines
+        let csCount = 0;
+        romInfo.control_lines.forEach(line => {
+            if (line.configurable) {
+                csCount++;
+                const csRow = document.getElementById(`customCs${csCount}Row`);
+                if (csRow) {
+                    csRow.classList.add('visible');
+                }
+            }
+        });
+        
+        this.updateBuildButton();
+    },
+    
+    hideCs() {
+        ['customCs1Row', 'customCs2Row', 'customCs3Row'].forEach(id => {
+            const row = document.getElementById(id);
+            row.classList.remove('visible');
+            document.getElementById(id.replace('Row', 'Select')).value = '';
+        });
+    },
+    
+    updateBuildButton() {
+        const model = document.getElementById('customModelSelect').value;
+        const pcb = document.getElementById('customPcbSelect').value;
+        const mcu = document.getElementById('customMcuSelect').value;
+        const version = document.getElementById('customVersionSelect').value;
+        const romType = document.getElementById('customRomTypeSelect').value;
+        
+        // Check if all required fields are filled
+        let allFilled = model && pcb && mcu && version && this.romFile && romType;
+        
+        // Check CS lines if visible
+        if (allFilled) {
+            ['customCs1Row', 'customCs2Row', 'customCs3Row'].forEach(rowId => {
+                const row = document.getElementById(rowId);
+                if (row.classList.contains('visible')) {
+                    const select = document.getElementById(rowId.replace('Row', 'Select'));
+                    if (!select.value) {
+                        allFilled = false;
+                    }
+                }
+            });
+        }
+        
+        document.getElementById('customBuildBtn').disabled = !allFilled;
+
+        
+        // Disable Program button - any form change invalidates built firmware
+        connectProgramButton.disabled = !this.builtFirmware;
+    },
+    
+    async buildFirmware() {
+        const buildBtn = document.getElementById('customBuildBtn');
+        buildBtn.disabled = true;
+        buildBtn.textContent = 'Building...';
+        
+        try {
+            // Build JSON config
+            const config = this.buildConfig();
+            const configJson = JSON.stringify(config);
+            
+            console.log('Config JSON:', configJson);
+            
+            // Get firmware version and family
+            const version = document.getElementById('customVersionSelect').value;
+            const boardInfo = this.wasm.board_info(this.selectedBoard);
+            const family = boardInfo.mcu_family;
+            
+            // Download base firmware
+            buildBtn.textContent = 'Downloading base firmware...';
+            const baseFirmware = await this.downloadBaseFirmware(version, this.selectedBoard, this.selectedMcu);
+            console.log('Base firmware:', baseFirmware.length, 'bytes');
+            
+            // Create builder
+            buildBtn.textContent = 'Building config...';
+            const builder = this.wasm.gen_builder_from_json(version, family, configJson);
+            
+            // Get file specs
+            const fileSpecs = this.wasm.gen_file_specs(builder);
+            console.log('File specs:', fileSpecs);
+            
+            // Add our ROM file (should be only one spec)
+            if (fileSpecs.length !== 1) {
+                throw new Error('Expected exactly one file spec for single ROM');
+            }
+            
+            this.wasm.gen_add_file(builder, fileSpecs[0].id, Array.from(this.romFile));
+            
+            // Build properties
+            const versionParts = version.split('.');
+            const properties = {
+                version: {
+                    major: parseInt(versionParts[0]),
+                    minor: parseInt(versionParts[1]),
+                    patch: parseInt(versionParts[2]),
+                    build: 0
+                },
+                board: this.selectedBoard,
+                mcu_variant: this.selectedMcu,
+                serve_alg: 'default',
+                boot_logging: true
+            };
+            
+            // Build firmware
+            buildBtn.textContent = 'Building metadata...';
+            const images = this.wasm.gen_build(builder, properties);
+            const metadata = new Uint8Array(images.metadata);
+            const romImages = new Uint8Array(images.firmware_images);
+                
+            console.log('Metadata:', metadata.length, 'bytes');
+            console.log('ROM images:', romImages.length, 'bytes');
+            
+            // Combine base firmware + metadata + ROM images
+            buildBtn.textContent = 'Combining...';
+            this.builtFirmware = this.combineFirmware(baseFirmware, metadata, romImages);
+            
+            console.log('Complete firmware:', this.builtFirmware.length, 'bytes');
+            
+            // Enable save and program buttons
+            document.getElementById('customSaveBtn').disabled = false;
+            connectProgramButton.disabled = false;
+
+            buildBtn.textContent = 'Build Complete!';
+            setTimeout(() => {
+                try {
+                    buildBtn.textContent = 'Build Firmware';
+                    buildBtn.disabled = false;
+                    updateProgramButtonForCurrentTab();
+                } catch (error) {
+                    console.error('Error in build button reset:', error);
+                }
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Build error:', error);
+            alert('Failed to build firmware: ' + error);
+            buildBtn.textContent = 'Build Firmware';
+            buildBtn.disabled = false;
+        }
+    },
+    
+    buildConfig() {
+        const romType = document.getElementById('customRomTypeSelect').value;
+        
+        // Build ROM config
+        const romConfig = {
+            file: this.romFileName,
+            type: romType,
+            size_handling: 'none'
+        };
+        
+        // Add CS lines if configured
+        const romInfo = this.wasm.rom_type_info(romType);
+        let csIndex = 1;
+        romInfo.control_lines.forEach(line => {
+            if (line.configurable) {
+                const csValue = document.getElementById(`customCs${csIndex}Select`).value;
+                romConfig[`cs${csIndex}`] = csValue;
+                csIndex++;
+            }
+        });
+        
+        // Build full config
+        return {
+            version: 1,
+            description: `Custom single ROM: ${this.romFileName}`,
+            rom_sets: [{
+                type: 'single',
+                roms: [romConfig]
+            }]
+        };
+    },
+    
+    async saveFirmware() {
+        if (!this.builtFirmware) return;
+
+        // Build filename from board and version
+        const pcbSelect = document.getElementById('customPcbSelect');
+        const pcbName = pcbSelect.options[pcbSelect.selectedIndex].text
+            .toLowerCase()
+            .replace(/\s+/g, '-');
+        const version = document.getElementById('customVersionSelect').value;
+        const filename = `onerom-${pcbName}-v${version}-custom.bin`;
+
+        try {
+            // Show save dialog
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'Binary Files',
+                    accept: { 'application/octet-stream': ['.bin'] }
+                }]
+            });
+            
+            // Write the file
+            const writable = await handle.createWritable();
+            await writable.write(this.builtFirmware);
+            await writable.close();
+            
+        } catch (error) {
+            // User cancelled or error occurred
+            if (error.name !== 'AbortError') {
+                console.error('Save error:', error);
+                alert('Failed to save file: ' + error.message);
+            }
+        }
+    },
+    
+    async downloadBaseFirmware(version, board, mcu) {
+        // Fetch releases manifest
+        const response = await fetch(ONEROM_RELEASES_MANIFEST_URL);
+        const releases = await response.json();
+        
+        // Find the release
+        const release = releases.releases.find(r => r.version === version);
+        if (!release) {
+            throw new Error(`Release ${version} not found`);
+        }
+        
+        // Find the board
+        const boardName = board.toLowerCase().replace(/_/g, '-');
+        const boardData = release.boards.find(b => b.name === boardName);
+        if (!boardData) {
+            throw new Error(`Board ${board} not found in release ${version}`);
+        }
+        
+        // Find the MCU
+        const mcuName = mcu.toLowerCase();
+        const mcuData = boardData.mcus.find(m => m.name === mcuName);
+        if (!mcuData) {
+            throw new Error(`MCU ${mcu} not found for board ${board} in release ${version}`);
+        }
+        
+        // Build URL
+        const releasePath = release.path || release.version;
+        const boardPath = boardData.path || boardData.name;
+        const mcuPath = mcuData.path || mcuData.name;
+        const url = `https://images.onerom.org/${releasePath}/${boardPath}/${mcuPath}/firmware.bin`;
+        
+        console.log('Downloading base firmware from:', url);
+        
+        // Download
+        const fwResponse = await fetch(url);
+        if (!fwResponse.ok) {
+            throw new Error(`Failed to download base firmware: ${fwResponse.status}`);
+        }
+        
+        const arrayBuffer = await fwResponse.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+    },
+
+    combineFirmware(baseFirmware, metadata, romImages) {
+        // Calculate total size
+        const totalSize = FIRMWARE_SIZE + MAX_METADATA_LEN + romImages.length;
+        const combined = new Uint8Array(totalSize);
+        
+        // Fill with 0xFF (erased flash)
+        combined.fill(0xFF);
+        
+        // Copy base firmware at offset 0
+        combined.set(baseFirmware, 0);
+        
+        // Copy metadata at offset FIRMWARE_SIZE
+        combined.set(metadata, FIRMWARE_SIZE);
+        
+        // Copy ROM images at offset FIRMWARE_SIZE + MAX_METADATA_LEN
+        combined.set(romImages, FIRMWARE_SIZE + MAX_METADATA_LEN);
+        
+        return combined;
+    },
+    
+    resetSelect(id) {
+        const select = document.getElementById(id);
+        select.innerHTML = '<option value="">Select...</option>';
+        select.disabled = true;
+    }
+};
+
+// Helper functions to check if tabs are ready
+function isUrlTabReady() {
+    const mcuSelect = document.getElementById('mcuSelectUrl');
+    const urlInput = document.getElementById('fileLocationBox');
+    return mcuSelect.value !== '' && urlInput.value.trim() !== '';
+}
+
+function isFileTabReady() {
+    const mcuSelect = document.getElementById('mcuSelectFile');
+    const fileInput = document.getElementById('fileUploadBox');
+    return mcuSelect.value !== '' && fileInput.files && fileInput.files.length > 0;
+}
+
+function isPrebuiltTabReady() {
+    return PrebuiltManager.selectedArtifact !== null;
+}
+
+function updateProgramButtonForCurrentTab() {
+    const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+    
+    if (activeTab === 'url') {
+        connectProgramButton.disabled = !isUrlTabReady();
+    } else if (activeTab === 'file') {
+        connectProgramButton.disabled = !isFileTabReady();
+    } else if (activeTab === 'prebuilt') {
+        connectProgramButton.disabled = !isPrebuiltTabReady();
+    } else if (activeTab === 'custom') {
+        connectProgramButton.disabled = !CustomImageManager.builtFirmware;
+    }
+}
+
 // Add event listeners for pre-built selectors
 document.getElementById('modelSelect')?.addEventListener('change', function() {
     if (this.value) {
         PrebuiltManager.filterByModel(this.value);
     }
+    updateProgramButtonForCurrentTab();
 });
 
 document.getElementById('hwRevSelect')?.addEventListener('change', function() {
@@ -631,6 +1261,7 @@ document.getElementById('hwRevSelect')?.addEventListener('change', function() {
     if (this.value && model) {
         PrebuiltManager.filterByHwRev(model, this.value);
     }
+    updateProgramButtonForCurrentTab();
 });
 
 document.getElementById('mcuSelectPrebuilt')?.addEventListener('change', function() {
@@ -639,6 +1270,7 @@ document.getElementById('mcuSelectPrebuilt')?.addEventListener('change', functio
     if (this.value && model && hwRev) {
         PrebuiltManager.filterByMcu(model, hwRev, this.value);
     }
+    updateProgramButtonForCurrentTab();
 });
 
 document.getElementById('versionSelect')?.addEventListener('change', function() {
@@ -648,12 +1280,14 @@ document.getElementById('versionSelect')?.addEventListener('change', function() 
     if (this.value && model && hwRev && mcu) {
         PrebuiltManager.filterByVersion(model, hwRev, mcu, this.value);
     }
+    updateProgramButtonForCurrentTab();
 });
 
 document.getElementById('romConfigSelect')?.addEventListener('change', function() {
     if (this.value) {
         PrebuiltManager.selectRomConfig(this.value);
     }
+    updateProgramButtonForCurrentTab();
 });
 
 // Handle tab switching
@@ -681,10 +1315,18 @@ tabButtons.forEach(button => {
         } else {
             buttonsAndBar.style.display = 'flex';
         }
-        
+
+        // Update program button for the new active tab
+        updateProgramButtonForCurrentTab();
+
         // Initialize prebuilt manager on first view
         if (targetTab === 'prebuilt' && PrebuiltManager.manifests.length === 0) {
             PrebuiltManager.init();
+        }
+
+        // Initialize custom image manager on first view
+        if (targetTab === 'custom' && !CustomImageManager.wasmInitialized) {
+            CustomImageManager.init();
         }
     });
 });
@@ -709,6 +1351,9 @@ tabButtons.forEach(button => {
             PrebuiltManager.init();
         }
     }
+
+   // Initialize Program button state
+   updateProgramButtonForCurrentTab();
 })();
 
 document.getElementById('fileUploadBox').addEventListener('change', function() {
@@ -720,7 +1365,15 @@ document.getElementById('fileUploadBox').addEventListener('change', function() {
         fileNameSpan.textContent = 'No file selected';
         fileNameSpan.style.color = 'var(--text-secondary)';
     }
+    updateProgramButtonForCurrentTab();
 });
+
+// URL tab event listeners
+document.getElementById('mcuSelectUrl').addEventListener('change', updateProgramButtonForCurrentTab);
+document.getElementById('fileLocationBox').addEventListener('input', updateProgramButtonForCurrentTab);
+
+// File tab event listeners
+document.getElementById('mcuSelectFile').addEventListener('change', updateProgramButtonForCurrentTab);
 
 async function readAndDisplayDeviceInfo() {
     let firmwareData = null;

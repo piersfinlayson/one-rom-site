@@ -109,15 +109,18 @@
             <!-- Update tab navigation to include Pre-built -->
             <div class="tab-navigation">
                 <button class="tab-button active" data-tab="prebuilt">Pre-built Image</button>
+                <button class="tab-button" data-tab="custom">Custom Image</button>
                 <button class="tab-button" data-tab="file">Local Image</button>
                 <button class="tab-button" data-tab="url">URL Image</button>
-                <button class="tab-button" data-tab="builder">Image Builder</button>
             </div>
 
             <div class="tab-content-container">
                 <div class="entry-boxes">
                     <!-- URL tab -->
                     <div class="tab-input" data-tab="url">
+                        <p style="margin-top: 0rem; margin-bottom: 1rem;">
+                            Program One ROM with a One ROM firmware binary hosted online.
+                        </p>
                         <select id="mcuSelectUrl" class="mcu-select">
                             <option value="">MCU Variant</option>
                             <option value="F401RB">F401RB</option>
@@ -135,6 +138,9 @@
                     
                     <!-- Local File tab -->
                     <div class="tab-input" data-tab="file" style="display: none;">
+                        <p style="margin-top: 0rem; margin-bottom: 1rem;">
+                            Program One ROM with a One ROM firmware binary stored on your computer.
+                        </p>
                         <select id="mcuSelectFile" class="mcu-select">
                             <option value="">MCU Variant</option>
                             <option value="F401RB">F401RB</option>
@@ -152,18 +158,103 @@
                         <input id="fileUploadBox" type="file" accept=".bin" style="display: none;">
                     </div>
 
-                    <!-- Image Builder tab -->
-                    <div class="tab-input" data-tab="builder">
-                        <p>
-                            Coming soon - build your own custom ROM collections!
+                    <!-- Custom Image tab -->
+                    <div class="tab-input" data-tab="custom">
+                        <p style="margin-top: 0rem; margin-bottom: 1rem;">
+                            Program One ROM with a single ROM binary image that you upload. For more complex configurations, use <a href="/studio/" target="_blank">One ROM Studio</a> and a <a href="https://github.com/piersfinlayson/one-rom/blob/main/rom-config/README.md" target="_blank">ROM config JSON file</a>.
                         </p>
-                        <p>
-                            For now, use <a href="https://onerom.org/studio">One ROM Studio</a>.
-                        </p>
+
+                        <div class="custom-image-container">
+                            <!-- Left Column: Device Selection -->
+                            <div class="custom-left">
+                                <h3>Device Configuration</h3>
+                                
+                                <div class="select-row">
+                                    <label>Model:</label>
+                                    <select id="customModelSelect">
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="select-row">
+                                    <label>PCB Revision:</label>
+                                    <select id="customPcbSelect" disabled>
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="select-row">
+                                    <label>MCU Variant:</label>
+                                    <select id="customMcuSelect" disabled>
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="select-row">
+                                    <label>Firmware Version:</label>
+                                    <select id="customVersionSelect" disabled>
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column: ROM Configuration -->
+                            <div class="custom-right">
+                                <h3>ROM Configuration</h3>
+
+                                <label for="customRomFile" class="file-button" style="margin-top: 0rem; margin-bottom: 0.5rem;">Upload ROM Image</label>
+                                <span id="customRomFileName">No file selected</span>
+                                <input id="customRomFile" type="file" accept=".bin,.rom" style="display: none;">
+
+                                <div class="select-row">
+                                    <label>ROM Type:</label>
+                                    <select id="customRomTypeSelect" disabled>
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="select-row custom-cs-row" id="customCs1Row">
+                                    <label>CS1 Logic:</label>
+                                    <select id="customCs1Select">
+                                        <option value="">Required</option>
+                                        <option value="active_low">Active Low</option>
+                                        <option value="active_high">Active High</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="select-row custom-cs-row" id="customCs2Row">
+                                    <label>CS2 Logic:</label>
+                                    <select id="customCs2Select">
+                                        <option value="">Required</option>
+                                        <option value="active_low">Active Low</option>
+                                        <option value="active_high">Active High</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="select-row custom-cs-row" id="customCs3Row">
+                                    <label>CS3 Logic:</label>
+                                    <select id="customCs3Select">
+                                        <option value="">Required</option>
+                                        <option value="active_low">Active Low</option>
+                                        <option value="active_high">Active High</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Build and Save buttons -->
+                        <div style="margin-top: 1rem;">
+                            <button id="customBuildBtn" class="gold-button" disabled>Build Firmware</button>
+                            <button id="customSaveBtn" class="gold-button" disabled>Save Firmware</button>
+                        </div>
                     </div>
-                    
+
                     <!-- Pre-built Images tab -->
                     <div class="tab-input" data-tab="prebuilt" style="display: none;">
+                        <p style="margin-top: 0rem; margin-bottom: 1rem;">
+                            Program a One ROM from a pre-built collection of ROM images.
+                        </p>
+
                         <div id="prebuiltLoading">Loading releases...</div>
                         <div id="prebuiltSelectors" style="display: none;">
                             <div class="select-row">

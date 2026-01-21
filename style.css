@@ -167,6 +167,18 @@ button:disabled {
     box-shadow: none;
 }
 
+button.gold-button:disabled {
+    background-color: var(--button-disabled-color);
+    color: var(--text-secondary);
+    border-color: var(--button-disabled-color);
+}
+
+button.gold-button:disabled:hover {
+    background-color: var(--button-disabled-color);
+    color: var(--text-secondary);
+    transform: none;
+}
+
 progress {
     flex: 1;
     height: 10px;
@@ -442,6 +454,37 @@ button.gold-button:hover {
     display: none;
 }
 
+/* Custom Image Tab */
+.custom-image-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.custom-left h3,
+.custom-right h3{
+    margin-top: 0;
+}
+
+.custom-left .select-row,
+.custom-right .select-row {
+    margin-bottom: 0.5rem;
+}
+
+.custom-cs-row {
+    display: none;
+}
+
+.custom-cs-row.visible {
+    display: flex;
+}
+
+#customRomFileName.selected {
+    color: var(--one-rom-gold);
+}
+
+
 @media (max-width: 850px) {
     body {
         padding: 1rem 0.5rem;
@@ -501,6 +544,11 @@ button.gold-button:hover {
     /* Override the inline right alignment */
     footer a[style*="text-align: right"] {
         text-align: center !important;
+    }
+
+    .custom-image-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
     }
 }
 
