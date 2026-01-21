@@ -95,11 +95,11 @@
                 <hr>
                 <h3>Models</h3>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
-                    <strong>Ice ❄️</strong>
-                    <span>Powered by an STM32F4* microcontroller. All core features, such as multiple ROM images, dynamic image switching, and replacing multiple ROMs with a single One ROM are all supported. Only has a single CPU core, so can support fewer advanced run-time features than Fire.</span>
-
                     <strong>Fire 🔥</strong>
-                    <span>Powered by an RP2350 microcontroller. Has a more powerful, dual core, processor so can support more advanced run-time features than Ice.</span>
+                    <span>Powered by an RP2350 microcontroller. The most powerful version of One ROM.  Currently available in 24 and 28 pin versions.</span>
+
+                    <strong>Ice ❄️</strong>
+                    <span>Powered by a STM32F4* microcontroller. All core features, such as multiple ROM images, dynamic image switching, and replacing multiple ROMs with a single One ROM are all supported. Only has a single CPU core, so can support fewer advanced run-time features than Fire. 24 pin version only.</span>
                 </div>
                 <p>
                     (*) Ice can be built with many different models of the STM32F4 microcontroller, offering different flash sizes, performance levels and cost.
@@ -109,13 +109,12 @@
                 <h3>Programming Options</h3>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start;">
                     <strong>USB 🔌</strong>
-                    <span>Easiest to program. Exposes a micro-USB port for programming directly from your browser. No programmer required. Currently only available on Ice. Fire version is under development.</span>
+                    <span>Easiest to program. Exposes a micro-USB port for programming directly from your browser. No programmer required. The latest USB boards also include Pro support (Fire 24 C+, Fire 28 A+ and Ice 24 I+).</span>
 
                     <strong>Pro 💪</strong>
-                    <span>Most powerful. Exposes SWD pins for programming using an ST-Link, Raspberry Pi Debug Probe, Pico or similar SWD programmer. Provides advanced features like runtime access to change ROM images and access telemetry while the host system is running. Available in both Ice and Fire versions.</span>
+                    <span>Exposes SWD pins for programming using an ST-Link, Raspberry Pi Debug Probe, Pico or similar SWD programmer. Provides advanced features like runtime access to change ROM images and access telemetry while the host system is running. Now included in latest USB boards.</span>
                 </div>
                 <hr>
-
                 <p>
                     All models and variants of One ROM support the same core feature sets and functionality.
                 </p>
@@ -129,13 +128,16 @@
             <details>
                 <summary>Technical Details</summary>
                 <p>
-                    One ROM firmware is written in C and hand-optimized assembly for performance.  The supporting tooling is primarily written in Rust using async. One ROM Web uses a WebAssembly build of the same Rust-based tooling, combined with WebUSB and Javascript. This combination provides ROM emulation fast enough for vintage systems using low cost microcontrollers, adds an intuitive web-based programming interface, and is supported by a robust and flexible toolchain.
+                    One ROM firmware is written in C and hand-optimized assembly for performance.  Additionally, the Fire version uses the RP2350's PIO state machines for even faster ROM serving.
+                </p>
+                <p>
+                    The supporting tooling is primarily written in Rust using async. One ROM Web uses a WebAssembly build of the same Rust-based tooling, combined with WebUSB and Javascript. This combination provides ROM emulation fast enough for vintage systems using low cost microcontrollers, adds an intuitive web-based programming interface, and is supported by a robust and flexible toolchain.
                 </p>
                 <p>
                     Chip select lines are software-configurable (HIGH or LOW) without the need for hardware jumpers or different PCB designs required by other solutions.  A single One ROM can store multiple different ROM image types, including different chip select configurations, simultaneously.
                 </p>
                 <p>
-                    Runtime access via SWD allows changing ROM images, accessing telemetry while the system is running, and is hackable - meaning you can add your own capabilities and features.
+                    Runtime access via SWD (Pro versions and latest USB versions) allows changing ROM images, accessing telemetry while the system is running, and is hackable - meaning you can add your own capabilities and features.
                 </p>
                 <p>
                     The <a href="https://github.com/piersfinlayson/one-rom" target="_blank">GitHub repository</a> contains comprehensive documentation, resources for developers, theory of operation, issue tracker and discussion space.
@@ -153,7 +155,7 @@
                     It is highly likely that One ROM works in other systems - please post in <a href="https://github.com/piersfinlayson/one-rom/discussions/31" target="_blank">this discussion</a> if you get One ROM working in your retro system(s).  If you hit problems, <a href="https://github.com/piersfinlayson/one-rom/issues/new/choose" target="_blank">open an issue</a>.
                 </p>
                 <p>
-                    You can see a list of the ROM types One ROM aims to emulate in the <a href="/visualizer/">One ROM Visualizer</a>.  This allows you to explore the pinouts of the original ROM chips.
+                    You can see a list of the ROM types One ROM aims to emulate in the <a href="/visualizer/">One ROM Visualizer</a>, although it's possible not all types are supported today, or on earlier boards.  This allows you to explore the pinouts of the original ROM chips.
                 </p>
             </details>
         </div>
@@ -168,7 +170,7 @@
                     You are welcome to modify the One ROM design and firmware, and to sell your own manufactured boards commercially, so long as you comply with the project's <a href="https://github.com/piersfinlayson/one-rom/blob/main/LICENSE.md" target="_blank">licenses</a>.
                 </p>
                 <p>
-                    The two-layer PCB design with single-sided component placement keeps manufacturing costs low and supports cheap and DIY fabrication. Complete schematics, bill of materials, Gerbers and other fabrication files are provided.  We use JLCPCB for our boards, but other PCB manufacturers and assembly services should be compatible.
+                    The two-layer PCB design with single-sided component placement (24 and 28 pin versions) keeps manufacturing costs low and supports cheap and DIY fabrication. Complete schematics, bill of materials, Gerbers and other fabrication files are provided.  We use JLCPCB for our boards, but other PCB manufacturers and assembly services should be compatible.  Many users have fabbed their own boards.  However, if you'd rather buy them, see the <a href="/buy/" target="_blank">Buy</a> page.
                 </p>
             </details>
         </div>
@@ -177,8 +179,10 @@
             <details>
                 <summary>Coming Soon</summary>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start;">
-                    <strong>Web Image Builder</strong>
-                    <span>Build and flash custom ROM collections from <a href="/web/">One ROM Web</a></span>
+                    <strong>32 and 40 pin ROMs</strong>
+                    <span>These are under active prototyping.</span>
+                    <strong>RAM Support</strong>
+                    <span>This is under active development, and expected to be supported by Fire 24 C+ and Fire 28 A+.</span>
                 </div>
             </details>
         </div>
@@ -187,7 +191,7 @@
             <details>
                 <summary>Project History</summary>
                 <p>
-                    One ROM was formerly known as Software Defined Retro ROM (SDRR). The project started with STM32F4 microcontrollers replacing 24 pin ROMs, and later expanded to include the Raspberry Pi RP2350 when the A4 stepping was released, and also 28 pin ROMs.
+                    One ROM was formerly known as Software Defined Retro ROM (SDRR). The project started with STM32F4 microcontrollers replacing 24 pin ROMs, later expanded to include the Raspberry Pi RP2350 when the A4 stepping was released, and further to 28 pin ROMs.
                 </p>
             </details>
         </div>
