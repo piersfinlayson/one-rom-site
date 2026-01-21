@@ -1,9 +1,9 @@
-// Copyright (C) 2025 Piers Finlayson <piers@piers.rocks>
+// Copyright (C) 2026 Piers Finlayson <piers@piers.rocks>
 //
 // MIT License
 
 // Create a USB dfu device object
-let dfu = new usbDfuDevice();
+let dfu = new UnifiedProgrammer();
 
 // Initialize WASM
 let wasmInitialized = false;
@@ -27,7 +27,8 @@ const mcuVariantMap = {
     'F411RC': { line: 0x0002, storage: 0x02 },  // F411 + C
     'F411RE': { line: 0x0002, storage: 0x04 },  // F411 + E
     'F446RC': { line: 0x0003, storage: 0x02 },  // F446 + C
-    'F446RE': { line: 0x0003, storage: 0x04 }   // F446 + E
+    'F446RE': { line: 0x0003, storage: 0x04 },  // F446 + E
+    'RP2350': { line: 0x0005, storage: 0x07 },  // RP2350 + 2MB flash (also, RP2354)
 };
 
 // Storage size mapping (in bytes)
@@ -35,7 +36,8 @@ const storageSizeMap = {
     'StorageB': 128 * 1024,
     'StorageC': 256 * 1024,
     'StorageE': 512 * 1024,
-    'StorageG': 1024 * 1024
+    'StorageG': 1024 * 1024,
+    'Storage2MB': 2 * 1024 * 1024,
 };
 
 // Reverse lookup: convert firmware MCU values to variant name
@@ -98,18 +100,18 @@ function validateFirmware(fileArr, mcuVariant) {
     
     const expectedMcu = mcuVariantMap[mcuVariant];
     if (!expectedMcu) {
-        throw ("Error: Unknown STM32 variant selected");
+        throw ("Error: Unknown MCU variant selected");
     }
     
     if (mcuLine !== expectedMcu.line || mcuStorage !== expectedMcu.storage) {
         const actualMcu = getMcuVariantName(mcuLine, mcuStorage);
-        throw ("Error: One ROM firmware is for wrong STM32 variant (Firmware is for " + 
+        throw ("Error: One ROM firmware is for wrong MCU variant (Firmware is for " + 
                 actualMcu + ", expected " + mcuVariant + ")");
     }
     
     // Check USB DFU support flag in extra_info block
     const pointerOffset = infoStructBase + 0x38;
-    const flashBase = 0x08000000;
+    const flashBase = (mcuVariant === 'RP2350') ? 0x10000000 : 0x08000000;
     
     // Read pointer (little-endian)
     if (fileArr.byteLength < pointerOffset + 4) {
@@ -167,7 +169,7 @@ async function startUpdate() {
             // Check MCU variant is selected
             mcuVariant = document.getElementById('mcuSelectUrl').value;
             if (mcuVariant == "") {
-                throw ("Error: No STM32 variant selected");
+                throw ("Error: No MCU variant selected");
             }
 
             // Check URL is provided
@@ -198,7 +200,7 @@ async function startUpdate() {
             // Check MCU variant is selected
             mcuVariant = document.getElementById('mcuSelectFile').value;
             if (mcuVariant == "") {
-                throw ("Error: No STM32 variant selected");
+                throw ("Error: No MCU variant selected");
             }
             
             // Check a file has been selected
@@ -304,7 +306,7 @@ function dfuDisconnectHandler() {
 
 **Browser and Version:** 
 **Operating System:** 
-**STM32 Variant:** 
+**Board and MCU Variant:** 
 
 ## Issue Description
 
@@ -396,10 +398,7 @@ const PrebuiltManager = {
                 document.getElementById('prebuiltLoading').textContent = 'No pre-built images available';
             } else {
                 // Auto-select ice model and trigger cascade
-                const modelSelect = document.getElementById('modelSelect');
-                modelSelect.value = 'ice';
-                modelSelect.style.display = 'none';
-                this.filterByModel('ice');
+                PrebuiltManager.initializeModelSelector();
             }
         } catch (error) {
             document.getElementById('prebuiltLoading').textContent = 'Error loading releases: ' + error.message;
@@ -453,7 +452,17 @@ const PrebuiltManager = {
             });
         });
         
-        hwRevs.forEach(hwRev => {
+        // Convert Set to Array and sort by display name
+        const sortedHwRevs = Array.from(hwRevs).sort((a, b) => {
+            const manifestA = this.manifests.find(m => m.hardware[a]);
+            const manifestB = this.manifests.find(m => m.hardware[b]);
+            if (!manifestA || !manifestB) return 0;
+            const displayA = manifestA.hardware[a].display;
+            const displayB = manifestB.hardware[b].display;
+            return displayA.localeCompare(displayB);
+        });
+
+        sortedHwRevs.forEach(hwRev => {
             const manifest = this.manifests.find(m => m.hardware[hwRev]);
             if (manifest) {
                 const option = document.createElement('option');
@@ -600,6 +609,13 @@ const PrebuiltManager = {
         }
         
         return arrayBuffer;
+    },
+
+    initializeModelSelector() {
+        const modelSelect = document.getElementById('modelSelect');
+        modelSelect.value = 'fire';
+        modelSelect.style.display = 'block';
+        this.filterByModel('fire');
     }
 };
 
@@ -692,10 +708,7 @@ tabButtons.forEach(button => {
         if (activeTab === 'prebuilt') {
             PrebuiltManager.init().then(() => {
                 // Auto-select Ice and trigger cascade
-                const modelSelect = document.getElementById('modelSelect');
-                modelSelect.value = 'ice';
-                modelSelect.style.display = 'none'; // Hide it
-                PrebuiltManager.filterByModel('ice');
+                PrebuiltManager.initializeModelSelector();
             });
         }
     }

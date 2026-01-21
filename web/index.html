@@ -29,6 +29,14 @@
 
     <!-- Script which contains the WebUSB DFU functions -->
     <script src="/js/prog/usbDfuDevice.js"></script>
+
+    <!-- Picoboot library for RP2350 (Fire) -->
+    <script type="module">
+        import { Picoboot } from 'https://picoflash.org/pkg/picoboot.js';
+        window.Picoboot = Picoboot;  // Make it globally available
+    </script>
+
+    <script src="/js/prog/unifiedProgrammer.js"></script>
 </head>
 
 <!-- Page HTML content -->
@@ -45,7 +53,7 @@
             </div>
         </div>
         <p>
-            Works on Windows, Mac, Linux and Android.
+            Supports Fire and Ice One ROMs.  Works on Windows, Mac, Linux and Android.
         </p>
         <p>
             Use <a href="https://www.google.com/chrome/">Chrome</a>, <a href="https://www.microsoft.com/en-gb/edge/">Edge</a>, or another <a href="https://www.chromium.org/">Chromium</a> based browser. See <a href="#usage">Usage</a> for instructions.
@@ -111,7 +119,7 @@
                     <!-- URL tab -->
                     <div class="tab-input" data-tab="url">
                         <select id="mcuSelectUrl" class="mcu-select">
-                            <option value="">STM32 Variant</option>
+                            <option value="">MCU Variant</option>
                             <option value="F401RB">F401RB</option>
                             <option value="F401RC">F401RC</option>
                             <option value="F401RE">F401RE</option>
@@ -120,6 +128,7 @@
                             <option value="F411RE">F411RE</option>
                             <option value="F446RC">F446RC</option>
                             <option value="F446RE">F446RE</option>
+                            <option value="RP2350">RP2350</option>
                         </select>
                         <input id="fileLocationBox" type="url" placeholder="https://onerom.org/rom/firmware.bin" style="flex-grow: 1; width: 45ch;">
                     </div>
@@ -127,7 +136,7 @@
                     <!-- Local File tab -->
                     <div class="tab-input" data-tab="file" style="display: none;">
                         <select id="mcuSelectFile" class="mcu-select">
-                            <option value="">STM32 Variant</option>
+                            <option value="">MCU Variant</option>
                             <option value="F401RB">F401RB</option>
                             <option value="F401RC">F401RC</option>
                             <option value="F401RE">F401RE</option>
@@ -136,6 +145,7 @@
                             <option value="F411RE">F411RE</option>
                             <option value="F446RC">F446RC</option>
                             <option value="F446RE">F446RE</option>
+                            <option value="RP2350">RP2350</option>
                         </select>
                         <label for="fileUploadBox" class="file-button">Choose Firmware File</label>
                         <span id="fileName" style="margin-left: 0.5rem; color: var(--text-secondary);">No file selected</span>
@@ -147,16 +157,21 @@
                         <p>
                             Coming soon - build your own custom ROM collections!
                         </p>
-                        <p></p>
+                        <p>
+                            For now, use <a href="https://onerom.org/studio">One ROM Studio</a>.
+                        </p>
                     </div>
                     
                     <!-- Pre-built Images tab -->
                     <div class="tab-input" data-tab="prebuilt" style="display: none;">
                         <div id="prebuiltLoading">Loading releases...</div>
                         <div id="prebuiltSelectors" style="display: none;">
-                            <select id="modelSelect" style="display: none;">
-                                <option value="">Model</option>
-                            </select>
+                            <div class="select-row">
+                                <label>Model:</label>
+                                <select id="modelSelect">
+                                    <option value="">Model</option>
+                                </select>
+                            </div>
                             
                             <div class="select-row">
                                 <label>PCB Revision:</label>
@@ -166,7 +181,7 @@
                             </div>
                             
                             <div class="select-row">
-                                <label>STM32 Variant:</label>
+                                <label>MCU Variant:</label>
                                 <select id="mcuSelectPrebuilt" disabled>
                                     <option value="">Select...</option>
                                 </select>

@@ -14,7 +14,7 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR 
 // PERFORMANCE OF THIS SOFTWARE.
 
-// Changes to support One ROM USB Copyright 2025 Piers Finlayson
+// Changes to support One ROM USB Copyright 2026 Piers Finlayson
 //
 // MIT License
 
@@ -161,8 +161,8 @@ let usbDfuDevice = class {
             let pollTime = result.data.getUint8(1);
 
             // Print info in the debug console
-            console.log("Status: " + Object.keys(dfu.dfuError)[error] +
-                " in dfu state: " + Object.keys(dfu.dfuState)[state] +
+            console.log("Status: " + Object.keys(this.dfuError)[error] +
+                " in dfu state: " + Object.keys(this.dfuState)[state] +
                 ", Waiting: " + pollTime + "ms");
 
             // Wait for the given poll time
@@ -173,8 +173,8 @@ let usbDfuDevice = class {
                 state == this.dfuState.STATE_ERROR) {
 
                 // Return the error info
-                throw ("Error: " + Object.keys(dfu.dfuError)[error] +
-                    " in dfu state: " + Object.keys(dfu.dfuState)[state]);
+                throw ("Error: " + Object.keys(this.dfuError)[error] +
+                    " in dfu state: " + Object.keys(this.dfuState)[state]);
 
                 // This could be extended to return the error and state in a 
                 // more machine readable way for retrying operations. Here we
@@ -290,6 +290,66 @@ let usbDfuDevice = class {
                     });
                 }
             }
+
+            // Open the device if not already open
+            if (!this.device.opened) {
+                await this.device.open();
+                await this.device.selectConfiguration(1);
+                await this.device.claimInterface(0);
+            }
+
+            // Print some info to the console
+            console.log("Connected to device. Serial number: " +
+                this.device.serialNumber);
+
+            // Try to get status first to see if device is already initialized
+            let needsClear = false;
+            let state;
+
+            try {
+                state = await this.getStatus();
+                
+                // If we're in an error state, we need to clear it
+                if (state == this.dfuState.STATE_ERROR) {
+                    needsClear = true;
+                }
+            } catch (error) {
+                // getStatus failed, device needs initialization
+                needsClear = true;
+            }
+
+            // Clear status if needed (either error state or uninitialized)
+            if (needsClear) {
+                await this.clearStatus();
+                await this.getStatus();
+            }
+
+            // Done and return
+            return Promise.resolve();
+        }
+
+        // Catch errors
+        catch (error) {
+
+            // Return the error
+            return Promise.reject(error);
+        }
+    }
+
+    // Function to connect with an already-selected device
+    // Used when device selection is handled externally
+    async connectWithDevice(usbDevice) {
+
+        // First ensure WebUSB is available
+        if (!navigator.usb) {
+            return Promise.reject("Web USB not available. Are you using Chrome?");
+        }
+
+        // Attempt to connect
+        try {
+
+            // Use the provided device
+            this.device = usbDevice;
 
             // Open the device if not already open
             if (!this.device.opened) {
