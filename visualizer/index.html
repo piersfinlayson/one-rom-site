@@ -150,7 +150,8 @@
         async function loadWasm() {
             try {
                 // Adjust path to your WASM module
-                const module = await import('https://wasm.onerom.org/releases/v0.2.0/pkg/onerom_wasm.js');
+                const module = await import('https://wasm.onerom.org/releases/v0.3.0/pkg/onerom_wasm.js');
+                //const module = await import('http://localhost:8000/pkg/onerom_wasm.js');
                 await module.default();
                 wasmModule = module;
                 console.log('WASM loaded successfully');
@@ -165,7 +166,7 @@
         // Populate ROM type dropdown
         function populateRomTypes() {
             const select = document.getElementById('rom-select');
-            const romTypes = wasmModule.rom_types();
+            const romTypes = wasmModule.chip_types();
             
             romTypes.forEach(romType => {
                 const option = document.createElement('option');
@@ -178,7 +179,7 @@
         // Get ROM type info from WASM
         function getRomInfo(romType) {
             try {
-                return wasmModule.rom_type_info(romType);
+                return wasmModule.chip_type_info(romType);
             } catch (error) {
                 console.error('Failed to get ROM info:', error);
                 showError(`Failed to get info for ROM type: ${romType}`);
@@ -189,7 +190,7 @@
         // Calculate pin assignments
         function calculatePinMap(romInfo) {
             const pinMap = new Map();
-            const totalPins = romInfo.rom_pins;
+            const totalPins = romInfo.chip_pins;
 
             // Mark all pins as NC initially
             for (let i = 1; i <= totalPins; i++) {
@@ -262,7 +263,7 @@
         function createRomVisualization(romInfo) {
             const svg = document.getElementById('rom-svg');
             const pinMap = calculatePinMap(romInfo);
-            const totalPins = romInfo.rom_pins;
+            const totalPins = romInfo.chip_pins;
             const pinsPerSide = totalPins / 2;
 
             // Calculate dimensions
@@ -433,7 +434,7 @@
             document.getElementById('info-size').textContent = 
                 `${romInfo.size_bytes} bytes (${romInfo.size_bytes / 1024}KB)`;
             document.getElementById('info-package').textContent = 
-                `DIP-${romInfo.rom_pins}`;
+                `DIP-${romInfo.chip_pins}`;
             document.getElementById('info-addr-lines').textContent = 
                 romInfo.num_addr_lines;
             document.getElementById('info-data-lines').textContent = 

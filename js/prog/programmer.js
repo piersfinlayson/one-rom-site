@@ -3,7 +3,8 @@
 // MIT License
 
 // At the very top of programmer.js, after the copyright header
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.2.0/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.0/pkg/onerom_wasm.js';
+//const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
 const MAX_METADATA_LEN = 16 * 1024;  // 16KB
@@ -660,8 +661,8 @@ const PrebuiltManager = {
 const CustomImageManager = {
     wasmInitialized: false,
     wasm: null,
-    romFile: null,
-    romFileName: null,
+    chipFile: null,
+    chipFileName: null,
     builtFirmware: null,
     selectedBoard: null,
     selectedMcu: null,
@@ -882,8 +883,8 @@ const CustomImageManager = {
         const fileNameSpan = document.getElementById('customRomFileName');
         
         if (!file) {
-            this.romFile = null;
-            this.romFileName = null;
+            this.chipFile = null;
+            this.chipFileName = null;
             fileNameSpan.textContent = 'No file selected';
             fileNameSpan.classList.remove('selected');
             this.resetSelect('customRomTypeSelect');
@@ -891,8 +892,8 @@ const CustomImageManager = {
             return;
         }
         
-        this.romFileName = file.name;
-        this.romFile = new Uint8Array(await file.arrayBuffer());
+        this.chipFileName = file.name;
+        this.chipFile = new Uint8Array(await file.arrayBuffer());
         
         fileNameSpan.textContent = file.name;
         fileNameSpan.classList.add('selected');
@@ -906,47 +907,47 @@ const CustomImageManager = {
     },
     
     updateRomTypes() {
-        if (!this.selectedBoard || !this.romFile) {
+        if (!this.selectedBoard || !this.chipFile) {
             this.resetSelect('customRomTypeSelect');
             return;
         }
         
         // Get board ROM pins
         const boardInfo = this.wasm.board_info(this.selectedBoard);
-        const boardRomPins = boardInfo.rom_pins;
+        const boardRomPins = boardInfo.chip_pins;
         
         // Get all ROM types
-        const allRomTypes = this.wasm.rom_types();
+        const allRomTypes = this.wasm.chip_types();
         
         // Filter by matching pin count and not in exclude list
-        const compatibleTypes = allRomTypes.filter(romType => {
-            if (this.excludedRomTypes.includes(romType)) return false;
-            const romInfo = this.wasm.rom_type_info(romType);
-            return romInfo.rom_pins === boardRomPins;
+        const compatibleTypes = allRomTypes.filter(chipType => {
+            if (this.excludedRomTypes.includes(chipType)) return false;
+            const chipInfo = this.wasm.chip_type_info(chipType);
+            return chipInfo.chip_pins === boardRomPins;
         });
         
         // Populate ROM type dropdown
-        const romTypeSelect = document.getElementById('customRomTypeSelect');
-        romTypeSelect.innerHTML = '<option value="">Select...</option>';
-        compatibleTypes.forEach(romType => {
+        const chipTypeSelect = document.getElementById('customRomTypeSelect');
+        chipTypeSelect.innerHTML = '<option value="">Select...</option>';
+        compatibleTypes.forEach(chipType => {
             const option = document.createElement('option');
-            option.value = romType;
-            option.textContent = romType;
-            romTypeSelect.appendChild(option);
+            option.value = chipType;
+            option.textContent = chipType;
+            chipTypeSelect.appendChild(option);
         });
-        romTypeSelect.disabled = false;
+        chipTypeSelect.disabled = false;
     },
     
-    onRomTypeChange(romType) {
+    onRomTypeChange(chipType) {
         // Get ROM type info to check for CS lines
-        const romInfo = this.wasm.rom_type_info(romType);
+        const chipInfo = this.wasm.chip_type_info(chipType);
         
         // Hide all CS rows first
         this.hideCs();
         
         // Show CS rows based on control lines
         let csCount = 0;
-        romInfo.control_lines.forEach(line => {
+        chipInfo.control_lines.forEach(line => {
             if (line.configurable) {
                 csCount++;
                 const csRow = document.getElementById(`customCs${csCount}Row`);
@@ -972,10 +973,10 @@ const CustomImageManager = {
         const pcb = document.getElementById('customPcbSelect').value;
         const mcu = document.getElementById('customMcuSelect').value;
         const version = document.getElementById('customVersionSelect').value;
-        const romType = document.getElementById('customRomTypeSelect').value;
+        const chipType = document.getElementById('customRomTypeSelect').value;
         
         // Check if all required fields are filled
-        let allFilled = model && pcb && mcu && version && this.romFile && romType;
+        let allFilled = model && pcb && mcu && version && this.chipFile && chipType;
         
         // Check CS lines if visible
         if (allFilled) {
@@ -1032,7 +1033,7 @@ const CustomImageManager = {
                 throw new Error('Expected exactly one file spec for single ROM');
             }
             
-            this.wasm.gen_add_file(builder, fileSpecs[0].id, Array.from(this.romFile));
+            this.wasm.gen_add_file(builder, fileSpecs[0].id, Array.from(this.chipFile));
             
             // Build properties
             const versionParts = version.split('.');
@@ -1088,19 +1089,19 @@ const CustomImageManager = {
     },
     
     buildConfig() {
-        const romType = document.getElementById('customRomTypeSelect').value;
+        const chipType = document.getElementById('customRomTypeSelect').value;
         
         // Build ROM config
         const romConfig = {
-            file: this.romFileName,
-            type: romType,
+            file: this.chipFileName,
+            type: chipType,
             size_handling: 'none'
         };
         
         // Add CS lines if configured
-        const romInfo = this.wasm.rom_type_info(romType);
+        const chipInfo = this.wasm.chip_type_info(chipType);
         let csIndex = 1;
-        romInfo.control_lines.forEach(line => {
+        chipInfo.control_lines.forEach(line => {
             if (line.configurable) {
                 const csValue = document.getElementById(`customCs${csIndex}Select`).value;
                 romConfig[`cs${csIndex}`] = csValue;
@@ -1111,7 +1112,7 @@ const CustomImageManager = {
         // Build full config
         return {
             version: 1,
-            description: `Custom single ROM: ${this.romFileName}`,
+            description: `Custom single ROM: ${this.chipFileName}`,
             rom_sets: [{
                 type: 'single',
                 roms: [romConfig]
