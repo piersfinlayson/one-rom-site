@@ -39,9 +39,22 @@
         </div>
 
         <div>
+            <h2>Installing</h2>
+            <p><strong>Always</strong> install One ROM in the correct orientation.  Pin 1 is clearly marked with a white L (corner) shape on the PCB.  The USB connector is always at <strong>the other end</strong> to pin 1.</p>
+            <p>⚠️ Incorrect installation can damage your One ROM, your retro system, or both.</p>
+            <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+                <img src="/images/one-rom/pin1-a3-subset.png" alt="One ROM Pin 1" style="height: 300px">
+                <img src="/images/one-rom/pin1-a3-whole.png" alt="One ROM Pin 1" style="height: 300px">
+            </div>
+        </div>
+
+        <div>
             <h2>Programming Options</h2>
 
-            <div style="display: grid; grid-template-columns: auto auto 1fr; gap: 1rem; align-items: start;">
+            <p>One ROM comes either blank or pre-programmed with a specific set of ROM images.  You will need to program it with the desired ROM images before use.</p>
+            <p>Your options are:</p>
+
+            <div style="display: grid; grid-template-columns: auto auto 1fr; gap: 1rem; align-items: start; margin-top: 1rem;">
                 <div>💿</div>
                 <div><a href="/studio/">One ROM Studio</a></div>
                 <div>A native desktop application for Windows, macOS and Linux.<br>This is the best option for most users.</div>
@@ -60,21 +73,34 @@
 
         <div>
             <h2>One ROM Hardware</h2>
+            <p>You can either <a href="/buy/">buy One ROMs</a> or have your own manufactured using the <a href="github.com/piersfinlayson/one-rom/">design files</a>.</p>
+            <p>Choose from the options below.</p>
             <h3>
                 Models
             </h3>
             <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
-                <strong style="text-align: right;">Ice ❄️</strong>
-                <span>Powered by an STM32F4 microcontroller. Often comes with an <strong>F411RE</strong> MCU, but other variants are available.</span>
                 <strong style="text-align: right;">Fire 🔥</strong>
-                <span>Powered by a Raspberry Pi RP2350 microcontroller.</span>
+                <span>The most powerful One ROM, powered by a Raspberry Pi RP2350 microcontroller.</span>
+                <strong style="text-align: right;">Ice ❄️</strong>
+                <span>An alternative, powered by an STM32F4 microcontroller. Often comes with an <strong>F411RE</strong> MCU, but other variants are available.</span>
+            </div>
+            <h3>
+                Pins
+            </h3>
+            <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
+                <strong style="text-align: right;">24 pin</strong>
+                <span>Emulates 2316, 2332 and 2364 mask programmed ROMs and 2716 and 2732 EPROMs. Now also supports emulating 2016/6116 SRAM.</span>
+
+                <strong style="text-align: right;">28 pin</strong>
+                <span>Emulates 23128, 23256 and 23512 mask programmed ROMs and 2764, 27128, 27256 and 27512 EPROMs.</span>
             </div>
             <h3>
                 Programming
             </h3>
-            <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
+            <p>The newest models support both USB and Pro in a single variant</p>
+            <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem; margin-top: 1rem;">
                 <strong style="text-align: right;">USB 🔌</strong>
-                <span>Includes a micro USB connector. Programmed using <a href="/studio/">One ROM Studio</a> or <a href="/web/">One ROM Web</a>.</span>
+                <span>Includes a micro USB or USB-C connector. Programmed using <a href="/studio/">One ROM Studio</a> or <a href="/web/">One ROM Web</a>.</span>
 
                 <strong style="text-align: right;">Pro 💪</strong>
                 <span>Programming using an SWD programmer connected to its programming pins. Programmed using <a href="/studio/">One ROM Studio</a>.</span>
@@ -143,10 +169,10 @@
         <div>
             <h2>ROM Images</h2>
             <p>
-                One ROM can be programmed with a collection of 2316, 2332 and 2364 ROM images.
+                One ROM can be programmed with a collection of different types of ROM images.
             </p>
             <p>
-                <a href="/web/">One ROM Web</a> allows you to select from a curated collections of popular ROM images for various retro systems.
+                <a href="/web/">One ROM Web</a> allows you to select from a curated collections of popular ROM images for various retro systems, and also upload your own ROM image.
             </p>
             <p>
                 As well as these pre-defined collections, <a href="/studio/">One ROM Studio</a> allows you to build your own collections and program those to One ROM, using a JSON configuration file.  See <a href="https://github.com/piersfinlayson/one-rom/blob/main/rom-config/sample.json">this sample config</a>.
@@ -161,10 +187,10 @@
                 One ROM offers flexible and powerful options for selecting between ROM images at boot time, selecting between them dynamcally (while the system is running), and also serving multiple ROM sockets simultaneously from a single One ROM socket.
             </p>
             <p>
-                To use this capability, you will need to use the header pins on One ROM.  These are located between pins 1 and 24 of the device.  If they are not populated with pins, you will need to solder standard 0.1"/2.54mm pitch header pins. 
+                To use this capability, you will need to use the header pins on One ROM.  These are located between pins 1 and 24/28 of the device.  If they are not populated with pins, you will need to solder standard 0.1"/2.54mm pitch header pins.
             </p>
             <p>
-                For instructions on how to use the header pins for image selection, see <a href="https://github.com/piersfinlayson/one-rom/blob/main/docs/GETTING-STARTED.md#image-selection">here</a>.  Note that different One ROM revisions may use different pins.
+                For instructions on how to use the header pins for image selection, see <a href="https://github.com/piersfinlayson/one-rom/blob/main/docs/GETTING-STARTED.md#image-selection">here</a>.  Note that different One ROM revisions may use different pins to indicate different image numbers.
             </p>
             <p>
                 If you are programming a single ROM image, you do not need to use the header pins.
