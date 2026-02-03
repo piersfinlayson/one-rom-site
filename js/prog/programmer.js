@@ -3,7 +3,7 @@
 // MIT License
 
 // At the very top of programmer.js, after the copyright header
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.0/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.1/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
