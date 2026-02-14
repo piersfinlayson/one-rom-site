@@ -742,6 +742,13 @@ const CustomImageManager = {
                 this.updateBuildButton();
             }
         });
+
+        // Size handling selection
+        document.querySelectorAll('input[name="customSizeHandling"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                this.updateBuildButton();
+            });
+        });
         
         // CS selections
         ['customCs1Select', 'customCs2Select', 'customCs3Select'].forEach(id => {
@@ -815,10 +822,12 @@ const CustomImageManager = {
         const mcuSelect = document.getElementById('customMcuSelect');
         mcuSelect.innerHTML = '<option value="">Select...</option>';
         mcus.forEach(mcu => {
-            const option = document.createElement('option');
-            option.value = mcu.value;
-            option.textContent = mcu.pretty;
-            mcuSelect.appendChild(option);
+            if (mcu.value !== 'RP2350B') {
+                const option = document.createElement('option');
+                option.value = mcu.value;
+                option.textContent = mcu.pretty;
+                mcuSelect.appendChild(option);
+            }
         });
         mcuSelect.disabled = false;
 
@@ -1090,12 +1099,13 @@ const CustomImageManager = {
     
     buildConfig() {
         const chipType = document.getElementById('customRomTypeSelect').value;
+        const sizeHandling = document.querySelector('input[name="customSizeHandling"]:checked').value;
         
         // Build ROM config
         const romConfig = {
             file: this.chipFileName,
             type: chipType,
-            size_handling: 'none'
+            size_handling: sizeHandling
         };
         
         // Add CS lines if configured

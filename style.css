@@ -484,6 +484,32 @@ button.gold-button:hover {
     color: var(--one-rom-gold);
 }
 
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    width: auto;
+    text-align: left;
+}
+
+.radio-option input[type="radio"] {
+    cursor: pointer;
+    margin: 0;
+}
+
+.help-text {
+    color: var(--one-rom-gold);
+    cursor: help;
+    font-size: 0.9em;
+    user-select: none;
+}
 
 @media (max-width: 850px) {
     body {

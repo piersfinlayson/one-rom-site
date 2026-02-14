@@ -212,6 +212,32 @@
                                         <option value="">Select...</option>
                                     </select>
                                 </div>
+
+                                <div class="select-row">
+                                    <label>Size Handling:</label>
+                                    <div class="radio-group">
+                                        <label class="radio-option">
+                                            <input type="radio" name="customSizeHandling" value="none" checked>
+                                            <span>None</span>
+                                            <span class="help-text" title="No special handling. Errors if the image size does not exactly match the Chip size.">ⓘ</span>
+                                        </label>
+                                        <label class="radio-option">
+                                            <input type="radio" name="customSizeHandling" value="duplicate">
+                                            <span>Duplicate</span>
+                                            <span class="help-text" title="Duplicates the image as many times as needed to fill the Chip. Errors if the image size is not an exact divisor of the Chip size.">ⓘ</span>
+                                        </label>
+                                        <label class="radio-option">
+                                            <input type="radio" name="customSizeHandling" value="truncate">
+                                            <span>Truncate</span>
+                                            <span class="help-text" title="Truncates the image to fit the Chip size. Errors if the image is an exact match size-wise.">ⓘ</span>
+                                        </label>
+                                        <label class="radio-option">
+                                            <input type="radio" name="customSizeHandling" value="pad">
+                                            <span>Pad</span>
+                                            <span class="help-text" title="Pads the image out with extra bytes to fill the Chip size.">ⓘ</span>
+                                        </label>
+                                    </div>
+                                </div>
                                 
                                 <div class="select-row custom-cs-row" id="customCs1Row">
                                     <label>CS1 Logic:</label>
