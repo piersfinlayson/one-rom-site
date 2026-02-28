@@ -31,15 +31,27 @@ class UnifiedProgrammer {
     async connect(forcePicker = false) {
         let usbDevice;
         
-        // If we have a cached device and not forcing picker, reuse it
+        // If we have a previously authorised device and aren't forcing the picker,
+        // try to get a *fresh* handle via getDevices() rather than reusing the
+        // stale cached object (which becomes invalid after a physical unplug/replug).
         if (!forcePicker && this.cachedUsbDevice) {
-            usbDevice = this.cachedUsbDevice;
-        } else {
-            // Show picker with both device types
-            if (!('usb' in navigator)) {
-                throw new Error('WebUSB not supported by this browser');
+            const devices = await navigator.usb.getDevices();
+            const refreshed = devices.find(d =>
+                d.vendorId === this.cachedUsbDevice.vendorId &&
+                d.productId === this.cachedUsbDevice.productId
+            );
+            if (refreshed) {
+                usbDevice = refreshed;
+                this.cachedUsbDevice = refreshed;  // keep cache current
+            } else {
+                // Device was unplugged and not yet re-paired; clear cache and
+                // fall through to the picker so the user can re-select it.
+                this.cachedUsbDevice = null;
             }
-            
+        }
+
+        if (!usbDevice) {
+            // Show picker...
             try {
                 usbDevice = await navigator.usb.requestDevice({
                     filters: [

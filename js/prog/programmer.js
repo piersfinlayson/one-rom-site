@@ -934,9 +934,12 @@ const CustomImageManager = {
             const chipInfo = this.wasm.chip_type_info(chipType);
             return chipInfo.chip_pins === boardRomPins;
         });
+
+        // Save old value to try to preserve selection if still compatible
+        const chipTypeSelect = document.getElementById('customRomTypeSelect');
+        const previousValue = chipTypeSelect.value;
         
         // Populate ROM type dropdown
-        const chipTypeSelect = document.getElementById('customRomTypeSelect');
         chipTypeSelect.innerHTML = '<option value="">Select...</option>';
         compatibleTypes.forEach(chipType => {
             const option = document.createElement('option');
@@ -945,6 +948,11 @@ const CustomImageManager = {
             chipTypeSelect.appendChild(option);
         });
         chipTypeSelect.disabled = false;
+
+        // Restore previous selection if still valid
+        if (previousValue && compatibleTypes.includes(previousValue)) {
+            chipTypeSelect.value = previousValue;
+        }
     },
     
     onRomTypeChange(chipType) {
