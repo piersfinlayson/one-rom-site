@@ -16,6 +16,10 @@ let dfu = new UnifiedProgrammer();
 let wasmInitialized = false;
 let parse_firmware;
 
+// Used to autodetect device properties from the connected device and pre-
+// populate the relevant fields in the relevant tabs.
+let detectedDevice = null;
+
 (async function() {
     const wasm = await import(ONEROM_WASM_URL);
     await wasm.default();
@@ -58,6 +62,7 @@ function getMcuVariantName(line, storage) {
 }
 
 function getMcuVariantFromStrings(line, storage) {
+    if (line && line.toLowerCase().startsWith('rp')) return 'RP2350';
     const storageLetter = storage.replace('Storage', '');
     return line + 'R' + storageLetter;
 }
@@ -426,7 +431,8 @@ const PrebuiltManager = {
                 document.getElementById('prebuiltLoading').textContent = 'No pre-built images available';
             } else {
                 // Auto-select ice model and trigger cascade
-                PrebuiltManager.initializeModelSelector();
+                applyDetectedDeviceToPrebuilt();
+                applyDetectedDeviceToCustom();
             }
         } catch (error) {
             document.getElementById('prebuiltLoading').textContent = 'Error loading releases: ' + error.message;
@@ -648,13 +654,6 @@ const PrebuiltManager = {
         
         return arrayBuffer;
     },
-
-    initializeModelSelector() {
-        const modelSelect = document.getElementById('modelSelect');
-        modelSelect.value = 'fire';
-        modelSelect.style.display = 'block';
-        this.filterByModel('fire');
-    }
 };
 
 // Custom Image Manager
@@ -690,6 +689,7 @@ const CustomImageManager = {
             // Setup event listeners
             this.setupEventListeners();
             
+            await applyDetectedDeviceToCustom();
         } catch (error) {
             console.error('Error initializing Custom Image Manager:', error);
             alert('Failed to initialize Custom Image Builder: ' + error.message);
@@ -1352,14 +1352,18 @@ tabButtons.forEach(button => {
         // Update program button for the new active tab
         updateProgramButtonForCurrentTab();
 
-        // Initialize prebuilt manager on first view
+        // Initialize prebuilt manager if pre-built tab is active on load
         if (targetTab === 'prebuilt' && PrebuiltManager.manifests.length === 0) {
             PrebuiltManager.init();
+        } else if (targetTab === 'prebuilt') {
+            applyDetectedDeviceToPrebuilt();
         }
 
         // Initialize custom image manager on first view
         if (targetTab === 'custom' && !CustomImageManager.wasmInitialized) {
             CustomImageManager.init();
+        } else if (targetTab === 'custom') {
+            applyDetectedDeviceToCustom();
         }
     });
 });
@@ -1407,6 +1411,71 @@ document.getElementById('fileLocationBox').addEventListener('input', updateProgr
 
 // File tab event listeners
 document.getElementById('mcuSelectFile').addEventListener('change', updateProgramButtonForCurrentTab);
+
+function applyDetectedDeviceToPrebuilt() {
+    if (PrebuiltManager.manifests.length === 0) return;
+
+    const modelSelect = document.getElementById('modelSelect');
+
+    const model = detectedDevice ? detectedDevice.model : 'fire';
+    modelSelect.value = model;
+    PrebuiltManager.filterByModel(model);
+
+    if (!detectedDevice || !detectedDevice.hw_rev) return;
+
+    const hwRevSelect = document.getElementById('hwRevSelect');
+    if (!hwRevSelect.querySelector(`option[value="${detectedDevice.hw_rev}"]`)) return;
+    hwRevSelect.value = detectedDevice.hw_rev;
+    PrebuiltManager.filterByHwRev(model, detectedDevice.hw_rev);
+
+    const mcuLower = detectedDevice.mcu.toLowerCase();
+    const mcuSelect = document.getElementById('mcuSelectPrebuilt');
+    if (!mcuSelect.querySelector(`option[value="${mcuLower}"]`)) return;
+    mcuSelect.value = mcuLower;
+    PrebuiltManager.filterByMcu(model, detectedDevice.hw_rev, mcuLower);
+
+    // Select latest version (manifests loaded latest-first, so first option after placeholder)
+    const versionSelect = document.getElementById('versionSelect');
+    if (versionSelect.options.length > 1) {
+        versionSelect.selectedIndex = 1;
+        const version = versionSelect.value;
+        PrebuiltManager.filterByVersion(model, detectedDevice.hw_rev, mcuLower, version);
+    }
+
+    updateProgramButtonForCurrentTab();
+}
+
+async function applyDetectedDeviceToCustom() {
+    if (!detectedDevice) return;
+    if (!CustomImageManager.wasmInitialized) return;
+
+    const previousRomType = document.getElementById('customRomTypeSelect').value;
+
+    const modelSelect = document.getElementById('customModelSelect');
+
+    const modelValue = detectedDevice.model === 'fire' ? 'Fire' : 'Ice';
+    modelSelect.value = modelValue;
+    await CustomImageManager.onModelChange(modelValue);
+
+    if (!detectedDevice.hw_rev) return;
+
+    const pcbSelect = document.getElementById('customPcbSelect');
+    if (!pcbSelect.querySelector(`option[value="${detectedDevice.hw_rev}"]`)) return;
+    pcbSelect.value = detectedDevice.hw_rev;
+    await CustomImageManager.onPcbChange(detectedDevice.hw_rev);
+
+    const mcuSelect = document.getElementById('customMcuSelect');
+    if (!mcuSelect.querySelector(`option[value="${detectedDevice.mcu}"]`)) return;
+    mcuSelect.value = detectedDevice.mcu;
+    await CustomImageManager.onMcuChange(detectedDevice.mcu);
+    // onMcuChange already auto-selects latest version
+
+    const romTypeSelect = document.getElementById('customRomTypeSelect');
+    if (previousRomType && romTypeSelect.querySelector(`option[value="${previousRomType}"]`)) {
+        romTypeSelect.value = previousRomType;
+        CustomImageManager.onRomTypeChange(previousRomType);
+    }
+}
 
 async function readAndDisplayDeviceInfo() {
     let firmwareData = null;
@@ -1469,6 +1538,20 @@ async function readAndDisplayDeviceInfo() {
             }
         } else {
             document.getElementById('deviceConfig').textContent = 'No ROMs';
+        }
+
+        // Store for pre-population of programming tabs
+        if (!parsedInfo.parse_errors || parsedInfo.parse_errors.length === 0) {
+            const mcuString = parsedInfo.stm_line && parsedInfo.stm_line.toLowerCase().startsWith('rp')
+                ? 'RP2350'
+                : getMcuVariantFromStrings(parsedInfo.stm_line, parsedInfo.stm_storage);
+            detectedDevice = {
+                model: mcuString === 'RP2350' ? 'fire' : 'ice',
+                hw_rev: parsedInfo.hw_rev || null,
+                mcu: mcuString,
+            };
+            applyDetectedDeviceToPrebuilt();
+            applyDetectedDeviceToCustom();
         }
 
         if (parsedInfo.parse_errors && parsedInfo.parse_errors.length > 0) {
