@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>One ROM CLI</title>
+    <meta name="description" content="CLI to manage One ROMs - the most flexible retro ROM replacement">
+    <link rel="canonical" href="https://onerom.org/cli/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/cli/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One ROM CLI | piers.rocks">
+    <meta property="og:description" content="CLI to manage One ROMs - the most flexible retro ROM replacement">
+    <meta property="og:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="twitter:domain" content="onerom.org">
+    <meta property="twitter:url" content="https://onerom.org/cli/">
+    <meta name="twitter:title" content="One ROM CLI | piers.rocks">
+    <meta name="twitter:description" content="CLI to manage One ROMs - the most flexible retro ROM replacement">
+    <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <script src="/js/release/release.js" data-product="cli" defer></script>
+</head>
+
+<body>
+    <div class="app">
+
+        <!-- Title -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
+            <h1 style="margin-bottom: 0; border-bottom: none;">One R<span class="o-in-rom">O</span>M CLI</h1>
+            <div style="display: flex; gap: 1rem;">
+                <a href="/web/" class="gold-button"><span class="michroma">Web</span></a>
+                <a href="/" class="gold-button"><span class="michroma">Home</span></a>
+            </div>
+        </div>
+        <h2>
+            Command line One ROM manager for Windows, Mac and Linux
+        </h2>
+        <details open>
+            <summary id="downloads">Example Usage</summary>
+                <pre><code><em style="font-family: inherit;"># Scan for connected One ROMs</em>
+$ onerom scan
+Scanning ...
+found 1 connected device:
+  One ROM Fire 24 E - Firmware: 0.6.7 State: Running Serial: 58AD06D6673B9257
+
+<em style="font-family: inherit;"># Program a new ROM image</em>
+$ onerom program --slot file=c64-kernal.rom,type=2364,cs1=0
+Programming device - DO NOT DISCONNECT
+Programming complete
+
+<em style="font-family: inherit;"># Control the status LED</em>
+$ onerom control led flame
+<em style="font-family: inherit;">The status LED starts flickering like a flame</em>
+</code></pre>
+        </details>
+
+        <details open>
+            <summary id="downloads">Downloads</summary>
+
+            <div id="downloads-table">
+                <p>Loading release information...</p>
+            </div>
+
+            <p>
+                Windows and Mac versions of One ROM CLI are digitally signed.
+            </p>
+            <p>
+                On Windows and macOS, unzip and extract the One ROM CLI executable and place in a suitable folder in your PATH.
+            </p>
+            <p>
+                On Linux, install the .deb package as normal.  For example, "sudo dpkg -i onerom-cli-x.y.z-1_amd64.deb" (replacing x.y.z with the version number).  This will place the "onerom" executable in your PATH.
+            </p>
+            <p>
+                As a new publisher, on Windows you may get a pop-up entitled "Windows protected your PC" the first time you run the application.  If this happens:
+            </p>
+            <ul>
+                <li>Click "More info"</li>
+                <li>Check the publisher contains "Open Source Developer, Piers Finlayson"</li>
+                <li>Click "Run anyway" to proceed</li>
+            </ul>
+            <p>
+                In addition to the Windows and Mac versions being signed, sha256 checksums for all downloads are provided.
+            </p>
+
+        </details>
+
+        <details>
+            <summary id="features">Features</summary>
+            <ul>
+                <li>Manage stopped and running One ROMs</li>
+                <li>View and modify the live ROM image being served, instantly</li>
+                <li>Build and program One ROM firmware</li>
+                <li>Perform advanced One ROM management tasks</li>
+            </ul>
+        </details>
+
+        <div id="footer"></div>
+        <script src="/js/site/footer.js"></script>
+
+    </div>
+
+</body>
+
+<script data-goatcounter="https://onerom-site.analytics.piers.rocks/count" async src="//onerom-site.analytics.piers.rocks/count.js"></script>
+
+</html>
