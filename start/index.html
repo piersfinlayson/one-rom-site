@@ -33,6 +33,7 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
             <h1 style="margin-bottom: 0; border-bottom: none;">Getting Started</h1>
             <div style="display: flex; gap: 1rem;">
+                <a href="/cli/" class="gold-button"><span class="michroma">CLI</span></a>
                 <a href="/studio/" class="gold-button"><span class="michroma">Studio</span></a>
                 <a href="/web/" class="gold-button"><span class="michroma">Web</span></a>
             </div>
@@ -55,17 +56,21 @@
             <p>Your options are:</p>
 
             <div style="display: grid; grid-template-columns: auto auto 1fr; gap: 1rem; align-items: start; margin-top: 1rem;">
-                <div>💿</div>
-                <div><a href="/studio/">One ROM Studio</a></div>
-                <div>A native desktop application for Windows, macOS and Linux.<br>This is the best option for most users.</div>
-
                 <div>🌐</div>
                 <div><a href="/web/">One ROM Web</a></div>
-                <div>A web-based application that works in Chrome-based browsers on Windows, macOS, Linux and Android.</div>
+                <div>A web-based application that works in Chrome-based browsers on Windows, macOS, Linux and Android.<br>This is the best option for most users.</div>
+
+                <div>💿</div>
+                <div><a href="/studio/">One ROM Studio</a></div>
+                <div>A native desktop application for Windows, macOS and Linux.</div>
+
+                <div>⌨️</div>
+                <div><a href="/cli/">One ROM CLI</a></div>
+                <div>A command line application for Windows, macOS and Linux.</div>
 
                 <div>💻</div>
                 <div><a href="#building-from-source">Building from source</a></div>
-                <div>For advanced users who prefer to build and program One ROM manually, using a terminal.</div>
+                <div>For developers who prefer to build and program One ROM from source.</div>
             </div>
         </div>
 
@@ -119,7 +124,7 @@
             <div style="display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.5rem;">
             <strong style="text-align: right;">Windows</strong>
             <span>
-                You must install a USB driver so that your computer can communicate with the One ROM device.  This is done using <a href="https://zadig.akeo.ie/">Zadig</a>.  See <a href="/web/index.html#windows">here</a> for instructions. 
+                Requires no special setup. 
             </span>
 
             <strong style="text-align: right;">macOS</strong>
@@ -127,7 +132,7 @@
 
             <strong style="text-align: right;">Linux</strong>
             <span>
-                If you are using <a href="/studio/">One ROM Studio</a> then no additional setup should be required.
+                If you are using <a href="/studio/">One ROM Studio</a> or <a href="/cli/">One ROM CLI</a> then no additional setup should be required.
                 <br>
                 If using <a href="/web/">One ROM Web</a> then you may need to set up a udev rule to allow access to the One ROM device.  You may also need to allow your browser to access USB devices.  See <a href="/web/index.html#linux">here</a>. 
             </span>
