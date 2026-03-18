@@ -17,12 +17,12 @@
         studio: {
             manifestUrl: 'https://images.onerom.org/studio/releases.json',
             downloadBase: 'https://images.onerom.org/studio',
-            imagesBase: 'images',
+            imagesBase: '/studio/images',
         },
         cli: {
             manifestUrl: 'https://images.onerom.org/cli/releases.json',
             downloadBase: 'https://images.onerom.org/cli',
-            imagesBase: 'images',
+            imagesBase: '/studio/images',
         }
     };
 
