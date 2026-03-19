@@ -72,7 +72,9 @@ class UnifiedProgrammer {
         }
         
         // Auto-detect device type from VID/PID
-        if (usbDevice.vendorId === 0x2e8a && usbDevice.productId === 0x000f) {
+        if ((usbDevice.vendorId === 0x2e8a && usbDevice.productId === 0x000f) ||
+            (usbDevice.vendorId === 0x1209 && usbDevice.productId === 0xf540) ||
+            (usbDevice.vendorId === 0x1209 && usbDevice.productId === 0xf542)) {
             this.deviceType = 'Fire';
             this.picobootDevice = Picoboot.fromDevice(usbDevice);
             await this.picobootDevice.connect();
@@ -173,13 +175,13 @@ class UnifiedProgrammer {
                 const dataArray = fileArr instanceof Uint8Array ? 
                     fileArr : new Uint8Array(fileArr);
                 
+                // Progress continues automatically via interval
+                dfuStatusHandler("Programming");
+                
                 await this.picobootDevice.flashEraseAndWrite(
                     this.RP2350_FLASH_BASE, 
                     dataArray
                 );
-                
-                dfuStatusHandler("Programming");
-                // Progress continues automatically via interval
                 
                 this._stopProgressEstimation(100);
                 dfuStatusHandler("Complete");
