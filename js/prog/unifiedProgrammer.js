@@ -56,7 +56,9 @@ class UnifiedProgrammer {
                 usbDevice = await navigator.usb.requestDevice({
                     filters: [
                         { vendorId: 0x0483, productId: 0xdf11 },  // STM32 DFU (Ice)
-                        { vendorId: 0x2e8a, productId: 0x000f }   // RP2350 Picoboot (Fire)
+                        { vendorId: 0x2e8a, productId: 0x000f },  // RP2350 Picoboot (Fire)
+                        { vendorId: 0x1209, productId: 0xf540 },  // One ROM Fire Bootloader
+                        { vendorId: 0x1209, productId: 0xf542 }  // One ROM Fire
                     ]
                 });
                 
