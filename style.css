@@ -147,6 +147,17 @@ button {
     transition: all 0.2s ease;
 }
 
+.device-buttons {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.device-buttons button {
+    margin-left: 0;
+    margin-right: 0;
+}
+
 button:hover {
     background-color: var(--button-hover-color);
     transform: translateY(-1px);

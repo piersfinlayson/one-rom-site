@@ -10,6 +10,7 @@ class UnifiedProgrammer {
         this.picobootDevice = null;
         this.cachedUsbDevice = null;
         this.progressInterval = null;
+        this.runMode = false;
         
         // Speed estimates for RP2350 (bytes per second)
         this.RP2350_SPEEDS = {
@@ -76,11 +77,13 @@ class UnifiedProgrammer {
             (usbDevice.vendorId === 0x1209 && usbDevice.productId === 0xf540) ||
             (usbDevice.vendorId === 0x1209 && usbDevice.productId === 0xf542)) {
             this.deviceType = 'Fire';
+            this.runMode = (usbDevice.productId === 0xf542);
             this.picobootDevice = Picoboot.fromDevice(usbDevice);
             await this.picobootDevice.connect();
         } else if (usbDevice.vendorId === 0x0483 && usbDevice.productId === 0xdf11) {
             this.deviceType = 'Ice';
             this.dfuDevice = new usbDfuDevice();
+            this.runMode = false;
             await this.dfuDevice.connectWithDevice(usbDevice);
         } else {
             throw new Error('Unknown device type');
@@ -196,6 +199,34 @@ class UnifiedProgrammer {
         } else {
             throw new Error('No device connected');
         }
+    }
+
+    /**
+     * Check if device is in Run mode (application mode, f542)
+     * @returns {boolean}
+     */
+    isRunMode() {
+        return this.runMode;
+    }
+
+    /**
+     * Reboot the device into stopped (bootloader) or running (application) mode
+     * @param {boolean} stopped - true for stopped/bootloader, false for running/application
+     * @returns {Promise<void>}
+     */
+    async reboot(stopped) {
+        if (!this.isConnected()) {
+            await this.connect(false);
+        }
+        if (this.deviceType !== 'Fire') {
+            throw new Error('Reboot only supported on Fire devices');
+        }
+        if (stopped) {
+            await this.picobootDevice.rebootRp2350(0x0002, 0x01, 0, 10);
+        } else {
+            await this.picobootDevice.rebootRp2350(0x0000, 0, 0, 10);
+        }
+        await this.disconnect();
     }
     
     /**

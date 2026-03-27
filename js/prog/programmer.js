@@ -3,8 +3,8 @@
 // MIT License
 
 // At the very top of programmer.js, after the copyright header
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.5/pkg/onerom_wasm.js';
-//const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.6/pkg/onerom_wasm.js';
+//const ONEROM_WASM_URL = 'http://macmini:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
 const MAX_METADATA_LEN = 16 * 1024;  // 16KB
@@ -84,6 +84,50 @@ connectProgramButton.addEventListener('click', function () {
     // Start the update function (This is an async process)
     startUpdate();
 });
+
+async function connectAndRead() {
+    await dfu.connect(true);
+    await readAndDisplayDeviceInfo();
+    await dfu.disconnect();
+    document.getElementById('connectBtn').textContent = 'Reconnect';
+}
+
+function updateDeviceButtons() {
+    const inRunMode = dfu.isRunMode();
+    const canRun = detectedDevice?.canRun ?? false;
+
+    document.getElementById('stopBtn').classList.toggle('hidden', !inRunMode);
+    document.getElementById('runBtn').classList.toggle('hidden', inRunMode || !canRun);
+
+    // Programming only valid in stopped mode
+    updateProgramButtonForCurrentTab();
+}
+
+async function stopDevice() {
+    const stopBtn = document.getElementById('stopBtn');
+    stopBtn.disabled = true;
+    try {
+        await dfu.reboot(true);
+        await connectAndRead();
+    } catch (error) {
+        alert('Failed to stop device: ' + (error.message || error));
+    } finally {
+        stopBtn.disabled = false;
+    }
+}
+
+async function runDevice() {
+    const runBtn = document.getElementById('runBtn');
+    runBtn.disabled = true;
+    try {
+        await dfu.reboot(false);
+        await connectAndRead();
+    } catch (error) {
+        alert('Failed to run device: ' + (error.message || error));
+    } finally {
+        runBtn.disabled = false;
+    }
+}
 
 // Validate firmware binary
 function validateFirmware(fileArr, mcuVariant) {
@@ -254,6 +298,14 @@ async function startUpdate() {
 
         // Validate firmware before flashing
         validateFirmware(fileArr, mcuVariant);
+
+        // Connect and verify device is not running
+        await dfu.connect(false);
+        if (dfu.isRunMode()) {
+            await readAndDisplayDeviceInfo();
+            await dfu.disconnect();
+            throw ("Error: Device is running - press Stop before programming");
+        }
         
         // Run the update sequence (existing code)
         await dfu.runUpdateSequence(fileArr, mcuVariant);
@@ -304,7 +356,7 @@ async function startUpdate() {
     }
 
     finally {
-        connectProgramButton.disabled = false;
+        updateProgramButtonForCurrentTab();
         connectBtn.disabled = false;
     }
 }
@@ -326,7 +378,7 @@ function dfuDisconnectHandler() {
     connectProgramButton.innerHTML = "Program";
 
     // Enable the button again
-    connectProgramButton.disabled = false;
+    updateProgramButtonForCurrentTab();
 
     // Reset the progress bar
     progressBar.value = 0;
@@ -600,6 +652,11 @@ const PrebuiltManager = {
     },
     
     selectRomConfig(romConfig) {
+        if (dfu.isRunMode()) {
+            connectProgramButton.disabled = true;
+            return;
+        }
+
         this.selectedArtifact = this.filteredArtifacts.find(a => a.rom_config === romConfig);
         
         if (this.selectedArtifact) {
@@ -830,7 +887,6 @@ const CustomImageManager = {
             }
         });
         mcuSelect.disabled = false;
-
     
         // Auto-select MCU if only one option available
         if (mcus.length === 1) {
@@ -916,40 +972,36 @@ const CustomImageManager = {
     },
     
     updateRomTypes() {
-        if (!this.selectedBoard || !this.chipFile) {
+        if (!this.selectedBoard) {
             this.resetSelect('customRomTypeSelect');
             return;
         }
         
-        // Get board ROM pins
         const boardInfo = this.wasm.board_info(this.selectedBoard);
         const boardRomPins = boardInfo.chip_pins;
         
-        // Get all ROM types
-        const allRomTypes = this.wasm.chip_types();
+        const allRomTypes = this.wasm.supported_chip_type_aliases();
         
-        // Filter by matching pin count and not in exclude list
-        const compatibleTypes = allRomTypes.filter(chipType => {
-            if (this.excludedRomTypes.includes(chipType)) return false;
-            const chipInfo = this.wasm.chip_type_info(chipType);
+        // Sort the chip types alphabetically to keep those of the same family
+        // together, rather than the same underlying chip type
+        const compatibleTypes = allRomTypes.filter(alias => {
+            if (this.excludedRomTypes.includes(alias)) return false;
+            const chipInfo = this.wasm.chip_type_info(alias);
             return chipInfo.chip_pins === boardRomPins;
-        });
+        }).sort((a, b) => a.localeCompare(b));
 
-        // Save old value to try to preserve selection if still compatible
         const chipTypeSelect = document.getElementById('customRomTypeSelect');
         const previousValue = chipTypeSelect.value;
         
-        // Populate ROM type dropdown
         chipTypeSelect.innerHTML = '<option value="">Select...</option>';
-        compatibleTypes.forEach(chipType => {
+        compatibleTypes.forEach(alias => {
             const option = document.createElement('option');
-            option.value = chipType;
-            option.textContent = chipType;
+            option.value = alias;
+            option.textContent = alias;
             chipTypeSelect.appendChild(option);
         });
         chipTypeSelect.disabled = false;
 
-        // Restore previous selection if still valid
         if (previousValue && compatibleTypes.includes(previousValue)) {
             chipTypeSelect.value = previousValue;
         }
@@ -1012,7 +1064,7 @@ const CustomImageManager = {
 
         
         // Disable Program button - any form change invalidates built firmware
-        connectProgramButton.disabled = !this.builtFirmware;
+        updateProgramButtonForCurrentTab();
     },
     
     async buildFirmware() {
@@ -1084,7 +1136,7 @@ const CustomImageManager = {
             
             // Enable save and program buttons
             document.getElementById('customSaveBtn').disabled = false;
-            connectProgramButton.disabled = false;
+            updateProgramButtonForCurrentTab();
 
             buildBtn.textContent = 'Build Complete!';
             setTimeout(() => {
@@ -1141,7 +1193,6 @@ const CustomImageManager = {
     async saveFirmware() {
         if (!this.builtFirmware) return;
 
-        // Build filename from board and version
         const pcbSelect = document.getElementById('customPcbSelect');
         const pcbName = pcbSelect.options[pcbSelect.selectedIndex].text
             .toLowerCase()
@@ -1149,27 +1200,32 @@ const CustomImageManager = {
         const version = document.getElementById('customVersionSelect').value;
         const filename = `onerom-${pcbName}-v${version}-custom.bin`;
 
-        try {
-            // Show save dialog
-            const handle = await window.showSaveFilePicker({
-                suggestedName: filename,
-                types: [{
-                    description: 'Binary Files',
-                    accept: { 'application/octet-stream': ['.bin'] }
-                }]
-            });
-            
-            // Write the file
-            const writable = await handle.createWritable();
-            await writable.write(this.builtFirmware);
-            await writable.close();
-            
-        } catch (error) {
-            // User cancelled or error occurred
-            if (error.name !== 'AbortError') {
-                console.error('Save error:', error);
-                alert('Failed to save file: ' + error.message);
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{
+                        description: 'Binary Files',
+                        accept: { 'application/octet-stream': ['.bin'] }
+                    }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(this.builtFirmware);
+                await writable.close();
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Save error:', error);
+                    alert('Failed to save file: ' + error.message);
+                }
             }
+        } else {
+            const blob = new Blob([this.builtFirmware], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
         }
     },
     
@@ -1261,6 +1317,12 @@ function isPrebuiltTabReady() {
 }
 
 function updateProgramButtonForCurrentTab() {
+    console.log('updateProgramButtonForCurrentTab: isRunMode=', dfu.isRunMode());
+    if (dfu.isRunMode()) {
+        connectProgramButton.disabled = true;
+        return;
+    }
+
     const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
     
     if (activeTab === 'url') {
@@ -1415,59 +1477,64 @@ document.getElementById('mcuSelectFile').addEventListener('change', updateProgra
 function applyDetectedDeviceToPrebuilt() {
     if (PrebuiltManager.manifests.length === 0) return;
 
+    const device = detectedDevice ?? { model: 'fire', hw_rev: 'fire-28-a', mcu: 'RP2350' };
+
     const modelSelect = document.getElementById('modelSelect');
+    modelSelect.value = device.model;
+    PrebuiltManager.filterByModel(device.model);
 
-    const model = detectedDevice ? detectedDevice.model : 'fire';
-    modelSelect.value = model;
-    PrebuiltManager.filterByModel(model);
-
-    if (!detectedDevice || !detectedDevice.hw_rev) return;
+    if (!device.hw_rev) return;
 
     const hwRevSelect = document.getElementById('hwRevSelect');
-    if (!hwRevSelect.querySelector(`option[value="${detectedDevice.hw_rev}"]`)) return;
-    hwRevSelect.value = detectedDevice.hw_rev;
-    PrebuiltManager.filterByHwRev(model, detectedDevice.hw_rev);
+    if (!hwRevSelect.querySelector(`option[value="${device.hw_rev}"]`)) return;
+    hwRevSelect.value = device.hw_rev;
+    PrebuiltManager.filterByHwRev(device.model, device.hw_rev);
 
-    const mcuLower = detectedDevice.mcu.toLowerCase();
+    const mcuLower = device.mcu.toLowerCase();
     const mcuSelect = document.getElementById('mcuSelectPrebuilt');
     if (!mcuSelect.querySelector(`option[value="${mcuLower}"]`)) return;
     mcuSelect.value = mcuLower;
-    PrebuiltManager.filterByMcu(model, detectedDevice.hw_rev, mcuLower);
+    PrebuiltManager.filterByMcu(device.model, device.hw_rev, mcuLower);
 
     // Select latest version (manifests loaded latest-first, so first option after placeholder)
     const versionSelect = document.getElementById('versionSelect');
     if (versionSelect.options.length > 1) {
         versionSelect.selectedIndex = 1;
         const version = versionSelect.value;
-        PrebuiltManager.filterByVersion(model, detectedDevice.hw_rev, mcuLower, version);
+        PrebuiltManager.filterByVersion(device.model, device.hw_rev, mcuLower, version);
     }
 
     updateProgramButtonForCurrentTab();
 }
 
 async function applyDetectedDeviceToCustom() {
-    if (!detectedDevice) return;
     if (!CustomImageManager.wasmInitialized) return;
+
+    const device = detectedDevice ?? {
+        model: 'Fire',
+        hw_rev: 'fire-28-a',
+        mcu: 'RP2350'
+    };
 
     const previousRomType = document.getElementById('customRomTypeSelect').value;
 
     const modelSelect = document.getElementById('customModelSelect');
 
-    const modelValue = detectedDevice.model === 'fire' ? 'Fire' : 'Ice';
+    const modelValue = device.model === 'fire' ? 'Fire' : device.model === 'ice' ? 'Ice' : device.model;
     modelSelect.value = modelValue;
     await CustomImageManager.onModelChange(modelValue);
 
-    if (!detectedDevice.hw_rev) return;
+    if (!device.hw_rev) return;
 
     const pcbSelect = document.getElementById('customPcbSelect');
-    if (!pcbSelect.querySelector(`option[value="${detectedDevice.hw_rev}"]`)) return;
-    pcbSelect.value = detectedDevice.hw_rev;
-    await CustomImageManager.onPcbChange(detectedDevice.hw_rev);
+    if (!pcbSelect.querySelector(`option[value="${device.hw_rev}"]`)) return;
+    pcbSelect.value = device.hw_rev;
+    await CustomImageManager.onPcbChange(device.hw_rev);
 
     const mcuSelect = document.getElementById('customMcuSelect');
-    if (!mcuSelect.querySelector(`option[value="${detectedDevice.mcu}"]`)) return;
-    mcuSelect.value = detectedDevice.mcu;
-    await CustomImageManager.onMcuChange(detectedDevice.mcu);
+    if (!mcuSelect.querySelector(`option[value="${device.mcu}"]`)) return;
+    mcuSelect.value = device.mcu;
+    await CustomImageManager.onMcuChange(device.mcu);
     // onMcuChange already auto-selects latest version
 
     const romTypeSelect = document.getElementById('customRomTypeSelect');
@@ -1550,6 +1617,11 @@ async function readAndDisplayDeviceInfo() {
                 hw_rev: parsedInfo.hw_rev || null,
                 mcu: mcuString,
             };
+            const firstRom = parsedInfo.rom_sets?.[0]?.roms?.[0];
+            console.log('First ROM type:', firstRom?.rom_type);
+            const canRun = parsedInfo.rom_sets?.length > 0 &&
+                        parsedInfo.rom_sets[0].roms?.length === 1 &&
+                        firstRom?.rom_type === 'SystemPlugin';            detectedDevice.canRun = canRun;
             applyDetectedDeviceToPrebuilt();
             applyDetectedDeviceToCustom();
         }
@@ -1559,7 +1631,7 @@ async function readAndDisplayDeviceInfo() {
                 '⚠ - One ROM firmware corrupt';
         } else {
             document.getElementById('deviceStatus').textContent = 
-                '✔ - One ROM firmware good';
+                '✔ - One ROM firmware good (' + (dfu.isRunMode() ? 'Running' : 'Stopped') + ')';
         }
         document.getElementById('devicePcbRevision').textContent =
             parsedInfo.hw_rev || "Unknown";
@@ -1573,6 +1645,8 @@ async function readAndDisplayDeviceInfo() {
             JSON.stringify(parsedInfo, null, 2);
             
         connectProgressBar.value = 100;
+
+        updateDeviceButtons();
     } catch (error) {
         // If we got firmware data but parsing failed = unrecognized firmware
         if (firmwareData !== null) {
@@ -1602,6 +1676,8 @@ async function readAndDisplayDeviceInfo() {
     }
 }
 
+document.getElementById('stopBtn').addEventListener('click', stopDevice);
+document.getElementById('runBtn').addEventListener('click', runDevice);
 document.getElementById('connectBtn').addEventListener('click', async function() {
     const connectBtn = this;
     const originalText = connectBtn.textContent;
@@ -1612,10 +1688,7 @@ document.getElementById('connectBtn').addEventListener('click', async function()
     try {
         connectBtn.textContent = 'Connecting';
         
-        await dfu.connect(true); // Force picker for manual connect
-        
-        connectBtn.textContent = 'Reading';
-        await readAndDisplayDeviceInfo();
+        await connectAndRead();
         
         connectBtn.textContent = 'Reconnect';
         connectBtn.disabled = false;
@@ -1639,7 +1712,7 @@ document.getElementById('connectBtn').addEventListener('click', async function()
             // Ignore disconnect errors
         }
     } finally {
-        connectProgramButton.disabled = false;
+        updateProgramButtonForCurrentTab();
         connectBtn.disabled = false;
     }
 });
