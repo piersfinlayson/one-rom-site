@@ -108,6 +108,10 @@
                 <span class="info-label">Data Lines:</span>
                 <span id="info-data-lines">-</span>
             </div>
+            <div class="info-row" style="display: block; margin-top: 0.5rem;">
+                <span class="info-label">Equivalent to:</span>
+                <span id="info-aliases">-</span>
+            </div>
         </div>
 
         <hr style="margin-top: 3rem; margin-bottom: 2rem;">
@@ -163,15 +167,91 @@
             }
         }
 
+        const SORT_WEIGHT_OVERRIDES = {
+            '27C': {
+                '256':   256,
+                '512':   512,
+                '010':  1024,
+                '020':  2048,
+                '040':  4096,
+                '080':  8192,
+                '301':  8192,
+            },
+            '28C': {
+                '16':     16,
+                '64':     64,
+                '256':   256,
+                '512':   512,
+                '010':  1024,
+                '020':  2048,
+                '040':  4096,
+                '080':  8192,
+            },
+        };
+
+        function parseChipName(name) {
+            if (/^[A-Za-z]/.test(name)) {
+                const m = name.match(/^([A-Za-z]+)(.*)/);
+                return { family: m[1], subfamily: '', suffix: m[2], isAlphaFamily: true };
+            }
+            const m = name.match(/^(\d{2})([A-Za-z]*)(\d*)/);
+            if (m) {
+                return { family: m[1], subfamily: m[2] || '', suffix: m[3] || '', isAlphaFamily: false };
+            }
+            return { family: name, subfamily: '', suffix: '', isAlphaFamily: false };
+        }
+
+        function compareChips(a, b) {
+            const pa = parseChipName(a);
+            const pb = parseChipName(b);
+
+            // Alpha-prefixed families sort after numeric families
+            if (pa.isAlphaFamily !== pb.isAlphaFamily)
+                return pa.isAlphaFamily ? 1 : -1;
+
+            // Sort by family
+            const familyCmp = pa.family.localeCompare(pb.family);
+            if (familyCmp !== 0) return familyCmp;
+
+            // Alpha families: just compare remainder as string
+            if (pa.isAlphaFamily)
+                return pa.suffix.localeCompare(pb.suffix);
+
+            // Sort by subfamily (blank sorts first, then C, LC, SF etc.)
+            const subfamilyCmp = pa.subfamily.localeCompare(pb.subfamily);
+            if (subfamilyCmp !== 0) return subfamilyCmp;
+
+            // Check override table for suffix weight
+            const overrideKey = pa.family + pa.subfamily;
+            const overrides = SORT_WEIGHT_OVERRIDES[overrideKey];
+            const wa = overrides?.[pa.suffix] ?? (parseInt(pa.suffix, 10) || 0);
+            const wb = overrides?.[pb.suffix] ?? (parseInt(pb.suffix, 10) || 0);
+            return wa - wb;
+        }
+
         // Populate ROM type dropdown
         function populateRomTypes() {
             const select = document.getElementById('rom-select');
             const romTypes = wasmModule.chip_types();
             
+            // Build entries: [{label, value}] where value is always the canonical name
+            const entries = [];
             romTypes.forEach(romType => {
+                entries.push({ label: romType, value: romType });
+                const info = wasmModule.chip_type_info(romType);
+                info.aliases
+                    .filter(alias => alias !== romType)
+                    .forEach(alias => {
+                        entries.push({ label: alias, value: romType });
+                    });
+            });
+            
+            entries.sort((a, b) => compareChips(a.label, b.label));
+            
+            entries.forEach(({ label, value }) => {
                 const option = document.createElement('option');
-                option.value = romType;
-                option.textContent = romType;
+                option.value = value;
+                option.textContent = label;
                 select.appendChild(option);
             });
         }
@@ -439,6 +519,14 @@
                 romInfo.num_addr_lines;
             document.getElementById('info-data-lines').textContent = 
                 romInfo.data_pins.length;
+                
+            // aliases already contains all names for this chip including the canonical name.
+            // Filter out whichever name the user selected, show the rest as equivalents.
+            const selectedLabel = document.getElementById('rom-select').options[
+                document.getElementById('rom-select').selectedIndex].text;
+            const equivalents = romInfo.aliases.filter(a => a !== selectedLabel);
+            document.getElementById('info-aliases').textContent =
+                equivalents.length > 0 ? equivalents.join(', ') : 'None';
             
             document.getElementById('info-panel').style.display = 'block';
         }
