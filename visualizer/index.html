@@ -340,7 +340,7 @@
         }
 
         // Create SVG visualization
-        function createRomVisualization(romInfo) {
+        function createRomVisualization(romInfo, selectedLabel) {
             const svg = document.getElementById('rom-svg');
             const pinMap = calculatePinMap(romInfo);
             const totalPins = romInfo.chip_pins;
@@ -399,7 +399,7 @@
             chipText.setAttribute('font-size', '64');
             chipText.setAttribute('font-weight', 'bold');
             chipText.setAttribute('fill', 'var(--text-secondary)');
-            chipText.textContent = romInfo.name;
+            chipText.textContent = selectedLabel;
             icGroup.appendChild(chipText);
 
             // Draw pins
@@ -556,7 +556,9 @@
 
             // Update UI
             updateInfoPanel(romInfo);
-            createRomVisualization(romInfo);
+            const selectedLabel = document.getElementById('rom-select').options[
+                document.getElementById('rom-select').selectedIndex].text;
+            createRomVisualization(romInfo, selectedLabel);
         }
 
         // Initialize application
