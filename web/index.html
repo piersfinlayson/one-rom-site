@@ -342,17 +342,16 @@
                 <ol>
                     <li>First time setup:
                         <ul>
-                            <li><a href="#windows">Windows</a></li>
-                            <li><a href="#linux">Linux</a></li>
+                            <li><a href="#windows">Windows</a> - Only required for One ROM Ice, not One ROM Fire</li>
+                            <li><a href="#linux">Linux</a> - Required for all types of One ROMs</li>
                             <li>Mac - not required</li>
                             <li>Android - not required</li>
                         </ul>
                     </li>
-                    <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
-                    <li>Click the "Connect" button.  A popup will appear asking you to select a device. Select "RP2350 Boot" (Fire) or "STM32 BOOTLOADER" (Ice) and click "Connect".  On Android you may receive another pop-up asking you to confirm the browser's USB access.</li>
+                    <li>Plug in your One ROM.</li>
+                    <li>Click the "Connect" button.  A popup will appear asking you to select a device. Select "RP2350 Boot" or "One ROM" and click "Connect".  On Android you may receive another pop-up asking you to confirm the browser's USB access.</li>
                     <li>The device's current firmware will be read and analyzed, with information being displayed once complete.</li>
                     <li>Choose the firmware source: Pre-built, Custom, Local or URL.</li>
-                    <li>(Ice only) Select the MCU variant you are programming, and in the case of the pre-built image, your PCB revision and desired One ROM firmware version.  If an ONE ROM firmware was detected on the device you can use the values displayed.  On Fire, RP2350 will be pre-selected.</li>
                     <li>Choose a pre-built config, upload and configure the ROM image, select a local firmware file, or enter the URL of the firmware file to program.</li>
                     <li>Click the "Program" button.</li>
                     <li>The button text will change to "Erasing". Wait for this to complete.</li>
@@ -366,7 +365,7 @@
             <details id="problems">
                 <summary>Problems</summary>
                 <p>
-                    If you encounter any issues using this programmer, <a href="#" id="githubIssueLink1" target="_blank">raise a GitHub issue</a>.
+                    If you encounter any issues using this programmer, <a href="#" id="githubIssueLink1" target="_blank">raise a GitHub issue</a> or <a href="https://discord.gg/tq22nJefXr">join the Discord community</a> and raise it there.
                 </p>
             </details>
         </div>
@@ -376,23 +375,21 @@
                 <summary>FAQ</summary>
                 <ul>
                     <ul><strong>Q: What if I hit problems?</strong></ul>
-                    <ul><strong>A:</strong> <a href="#" id="githubIssueLink" target="_blank">Raise a GitHub issue</a>.</ul>
-                    <ul><strong>Q: Why do I have to select the STM32 variant?</strong></ul>
-                    <ul><strong>A:</strong> So the programmer can ensure the firmware you provided is for your specific STM32 chip, and that your One ROM USB has enough flash space for the firmware image.</ul>
-                    <ul><strong>Q: How do I know what STM32 variant my One ROM has?</strong></ul>
-                    <ul><strong>A:</strong> Read the part number from One ROM's main IC.  You are looking for the 6 characters immediately after "STM32".</ul>
+                    <ul><strong>A:</strong> <a href="#" id="githubIssueLink" target="_blank">Raise a GitHub issue</a> or <a href="https://discord.gg/tq22nJefXr">join the Discord community</a> and raise it there.</ul>
                     <ul><strong>Q: Why isn't there a pre-built image for my system?</strong></ul>
-                    <ul><strong>A:</strong> Either build it yourself using the <a href="https://github.com/piersfinlayson/one-rom">One ROM github repo</a>, or <a href="#" id="githubIssueLink3" target="_blank">raise a GitHub issue</a> letting us know where we can find the ROM image(s) you want One ROM to serve.</ul>
-                    <ul><strong>Q: Why isn't my STM32 variant listed?</strong></ul>
-                    <ul><strong>A:</strong> Pre-built images are available for the most commonly used STM32 variants.  You can build images for other variants using the <a href="https://github.com/piersfinlayson/one-rom">One ROM github repo</a>.</ul>
+                    <ul><strong>A:</strong> We're moving away from providing pre-built images.  Build a custom image using the Custom Image tab.</ul>
                     <ul><strong>Q: Can I use this with Firefox, Safari, or another non-Chromium browser?</strong></ul>
                     <ul><strong>A:</strong> WebUSB, the technology behind this programmer, is only supported in Chromium based browsers like Chrome and Edge.</ul>
                     <ul><strong>Q: Can I use this on Linux or Mac?</strong></ul>
-                    <ul><strong>A:</strong> Yes, but you must still use a Chromium based browser.</ul>
-                    <ul><strong>Q: Can I use this with a non-USB version of One ROM?</strong></ul>
+                    <ul><strong>A:</strong> Yes, so long as you use a Chromium based browser.</ul>
+                    <ul><strong>Q: (Older One ROM Ice only) Why do I have to select the STM32 variant?</strong></ul>
+                    <ul><strong>A:</strong> So the programmer can ensure the firmware you provided is for your specific STM32 chip, and that your One ROM USB has enough flash space for the firmware image.</ul>
+                    <ul><strong>Q: (Older One ROM Ice only) How do I know what STM32 variant my One ROM has?</strong></ul>
+                    <ul><strong>A:</strong> Read the part number from One ROM's main IC.  You are looking for the 6 characters immediately after "STM32".</ul>
+                    <ul><strong>Q: (Older One ROM Ice only) Why isn't my STM32 variant listed?</strong></ul>
+                    <ul><strong>A:</strong> Pre-built images are available for the most commonly used STM32 variants.  You can build images for other variants using the <a href="https://github.com/piersfinlayson/one-rom">One ROM github repo</a>.</ul>
+                    <ul><strong>Q: Can I use this with an older, non-USB (Pro) version of One ROM?</strong></ul>
                     <ul><strong>A:</strong> This programmer currently only works with the USB version of One ROM.</ul>
-                    <ul><strong>Q: Can I use this to program other, non-One ROM, STM32 devices?</strong></ul>
-                    <ul><strong>A:</strong> This programmer only programs valid One ROM USB firmware - it checks the image before programming.  However, the site is based on generic STM32 DFU and RP2350 PICOBOOT implementations, and the code is MIT licensed, so you are free to copy and modify it for your own purposes.  For the RP2040/RP2350 see <a href="https://picoflash.org" target="_blank">picoflash.org</a>, which is a generic implementation.</ul>
                     <ul><strong>Q: Can I use this on my phone or tablet?</strong></ul>
                     <ul><strong>A:</strong> Yes, on an Android device using Chrome.  One ROM Web does not work on iPhone or iPad due to Apple's restrictive approach towards USB devices.</ul>
                     <ul><strong>Q: Is my privacy protected?</strong></ul>
@@ -408,7 +405,7 @@
         <div class="windows">
             <details id="windows">
                 <summary>Windows Setup</summary>
-                <p>These steps should not be required for Fire boards.</p>
+                <p>These steps should not be required for One ROM Fire boards.</p>
                 <ol>
                     <li>Download and install <a href="https://zadig.akeo.ie/" target="_blank">Zadig</a>.</li>
                     <li>Plug in your One ROM USB.  If this is a factory fresh One ROM USB, jump the B0 and 3V3 pads on the underside while plugging it in.  If the red LED doesn't light up faintly, try again.</li>
@@ -437,6 +434,7 @@
                         Create a file called <code>/etc/udev/rules.d/51-one-rom.rules</code> with the following content:
                         <pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", MODE="0666"</code></pre>
                         <pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", MODE="0666"</code></pre>
+                        <pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", MODE="0666"</code></pre>
                     </li>
                     <li>
                         Then run:
