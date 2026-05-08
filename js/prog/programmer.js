@@ -2,8 +2,9 @@
 //
 // MIT License
 
-// At the very top of programmer.js, after the copyright header
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.7/pkg/onerom_wasm.js';
+import { compareChips } from '/js/site/utils.js'
+
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.8/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://macmini.dyn.packom.net:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -359,29 +360,6 @@ async function startUpdate() {
         updateProgramButtonForCurrentTab();
         connectBtn.disabled = false;
     }
-}
-
-// Updates the button text. "Connecting", "Erasing", etc.
-function dfuStatusHandler(status) {
-    connectProgramButton.innerHTML = status;
-}
-
-// Updates the progress bar value. 0 - 100%
-function dfuProgressHandler(value) {
-    progressBar.value = value;
-}
-
-// This function is called on a disconnect event
-function dfuDisconnectHandler() {
-
-    // Reset the button back to 'connect'
-    connectProgramButton.innerHTML = "Program";
-
-    // Enable the button again
-    updateProgramButtonForCurrentTab();
-
-    // Reset the progress bar
-    progressBar.value = 0;
 }
 
 // Build GitHub issue URL with template
@@ -981,14 +959,20 @@ const CustomImageManager = {
         const boardRomPins = boardInfo.chip_pins;
         
         const allRomTypes = this.wasm.supported_chip_type_aliases();
+        const extraTypes = this.wasm.extra_chip_types_for_board(this.selectedBoard);
         
         // Sort the chip types alphabetically to keep those of the same family
         // together, rather than the same underlying chip type
-        const compatibleTypes = allRomTypes.filter(alias => {
-            if (this.excludedRomTypes.includes(alias)) return false;
-            const chipInfo = this.wasm.chip_type_info(alias);
-            return chipInfo.chip_pins === boardRomPins;
-        }).sort((a, b) => a.localeCompare(b));
+        const compatibleTypes = [
+            ...new Set([
+                ...allRomTypes.filter(alias => {
+                    if (this.excludedRomTypes.includes(alias)) return false;
+                    const chipInfo = this.wasm.chip_type_info(alias);
+                    return chipInfo.chip_pins === boardRomPins;
+                }),
+                ...extraTypes.filter(alias => !this.excludedRomTypes.includes(alias))
+            ])
+        ].sort(compareChips);
 
         const chipTypeSelect = document.getElementById('customRomTypeSelect');
         const previousValue = chipTypeSelect.value;
@@ -1716,3 +1700,26 @@ document.getElementById('connectBtn').addEventListener('click', async function()
         connectBtn.disabled = false;
     }
 });
+
+// Updates the button text. "Connecting", "Erasing", etc.
+window.dfuStatusHandler = function(status) {
+    connectProgramButton.innerHTML = status;
+}
+
+// Updates the progress bar value. 0 - 100%
+window.dfuProgressHandler = function(value) {
+    progressBar.value = value;
+}
+
+// This function is called on a disconnect event
+window.dfuDisconnectHandler = function() {
+
+    // Reset the button back to 'connect'
+    connectProgramButton.innerHTML = "Program";
+
+    // Enable the button again
+    updateProgramButtonForCurrentTab();
+
+    // Reset the progress bar
+    progressBar.value = 0;
+}
