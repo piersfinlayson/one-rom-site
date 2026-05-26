@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>One ROM - The Most Flexible Retro ROM Replacement</title>
+    <meta name="description" content="The most flexible retro ROM replacement - open source hardware and software.">
+    <link rel="canonical" href="https://onerom.org/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One ROM - The Most Flexible Retro ROM Replacement">
+    <meta property="og:description" content="The most flexible retro ROM replacement - open source hardware and software.">
+    <meta property="og:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://onerom.org/">
+    <meta name="twitter:title" content="One ROM - The Most Flexible Retro ROM Replacement">
+    <meta name="twitter:description" content="The most flexible retro ROM replacement - open source hardware and software.">
+    <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
+</head>
+
+<body>
+    <div id="content"></div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+    fetch('content.md')
+        .then(r => {
+            if (!r.ok) throw new Error(r.status);
+            return r.text();
+        })
+        .then(md => document.getElementById('content').innerHTML = marked.parse(md))
+        .catch(() => document.getElementById('content').innerHTML = '<p>Failed to load content.</p>');
+    </script>
+
+    <div id="footer"></div>
+    <script src="/js/site/footer.js"></script>
+</body>
+
+<script data-goatcounter="https://onerom-site.analytics.piers.rocks/count" async src="//onerom-site.analytics.piers.rocks/count.js"></script>
+
+</html>
