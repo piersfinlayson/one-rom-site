@@ -278,7 +278,25 @@
                                 </div>
                             </div>
                         </div>
-                        
+
+                        <!-- Plugins (Fire only; hidden for Ice) -->
+                        <div class="custom-plugins hidden" id="customPluginsSection">
+                            <h3>Plugins</h3>
+                            <div class="select-row" style="margin-bottom: 0.5rem;">
+                                <label>System Plugin:</label>
+                                <select id="customSystemPluginSelect">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                            <div class="select-row" style="margin-bottom: 0.5rem;">
+                                <label>User Plugin:</label>
+                                <select id="customUserPluginSelect">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                            <div id="customPluginMessage" class="config-description"></div>
+                        </div>
+
                         <!-- Build and Save buttons -->
                         <div style="margin-top: 1rem;">
                             <button id="customBuildBtn" class="gold-button" disabled>Build Firmware</button>
@@ -336,7 +354,11 @@
                 </div>
                 
                 <div class="buttons-and-bar">
-                    <button id="connectProgramButton" class="gold-button">Program</button>
+                    <div class="device-buttons">
+                        <button class="gold-button hidden" id="progStopBtn">Stop</button>
+                        <button class="gold-button hidden" id="progRunBtn">Run</button>
+                        <button id="connectProgramButton" class="gold-button">Program</button>
+                    </div>
                     <progress id="progressBar" value="0" max="100"></progress>
                 </div>
             </div>

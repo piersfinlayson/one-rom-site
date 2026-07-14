@@ -2,10 +2,63 @@
 //
 // MIT License
 
+// =============================================================================
+// ARCHITECTURAL NOTES / KNOWN ISSUES
+// -----------------------------------------------------------------------------
+// This file has grown organically and would benefit from a focused refactor.
+// Issues are recorded here so they can be picked up as separate pieces of work.
+//
+// 1. Dropdowns conflate "user intent" with "current display state".
+//    Each <select> (model, PCB, MCU, firmware version, ROM type, size handling,
+//    CS logic, and now the plugin selects) is treated as the source of truth
+//    for what the user chose. But these dropdowns are repopulated whenever the
+//    device is re-detected (e.g. after a flash, applyDetectedDeviceToCustom ->
+//    onModelChange resets the version, then onMcuChange re-selects it). During
+//    that repopulate the option list is briefly emptied and rebuilt, which
+//    discards the current selection before it can be restored - so a user's
+//    choice is silently lost on the next re-detect/repopulate cycle.
+//
+//    The correct model is to track the user's INTENT separately from the
+//    <select> value: only a genuine user change updates the intent, and every
+//    repopulate re-applies the intent against the newly-available options
+//    (selecting it if still offered, else falling back WITHOUT forgetting the
+//    intent). This makes selections "sticky" across re-detects.
+//
+//    A NARROW version of this is implemented for the plugin selects only (see
+//    systemPluginIntent / userPluginIntent in CustomImageManager). The GENERAL
+//    fix - applying the same intent-tracking to model/PCB/MCU/version/ROM type/
+//    size handling/CS - is deferred: it is a refactor of the manager's state
+//    model touching every field's change handler, and deserves its own pass
+//    with regression focus, rather than being bolted onto feature work.
+//
+//    The pattern relies on the user-change path being distinguishable from the
+//    programmatic-repopulate path: user changes fire the 'change' listeners;
+//    populate code sets .value directly and must NOT dispatch 'change'. This
+//    holds today and any general refactor must preserve it.
+//
+// 2. `canRun` uses "system plugin in slot 0" as a proxy for "USB present".
+//    Stop/Run is only meaningful on a device that can be reached over USB while
+//    running, which requires the USB system plugin. detectedDevice.canRun is
+//    currently derived (in readAndDisplayDeviceInfo) from slot 0 being a
+//    SystemPlugin. That holds ONLY while USB is the sole system plugin. If
+//    another system plugin can occupy slot 0, canRun would go true on a board
+//    with no USB control path - Run would then offer to reboot a device the
+//    tool cannot subsequently re-enumerate.
+//
+//    The correct signal is USB-plugin presence, not "any system plugin". The
+//    onerom-fw-parser crate (historically sdrr-fw-parser) already owns this:
+//    ParsedDevice::is_usb_run_capable() is the right home for the check. Today
+//    it uses the SAME proxy (system plugin exists) as this file, so exposing it
+//    over WASM would not fix the issue on its own - but it centralises the logic
+//    in one place. The proper fix is to narrow is_usb_run_capable() to test for
+//    the USB plugin specifically, then have the site consume that flag instead
+//    of deriving canRun from the slot-0 type here.
+// =============================================================================
+
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.12/pkg/onerom_wasm.js';
-//const ONEROM_WASM_URL = 'http://macmini.dyn.packom.net:8000/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.13/pkg/onerom_wasm.js';
+//const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
 const MAX_METADATA_LEN = 16 * 1024;  // 16KB
@@ -13,19 +66,27 @@ const MAX_METADATA_LEN = 16 * 1024;  // 16KB
 // Create a USB dfu device object
 let dfu = new UnifiedProgrammer();
 
-// Initialize WASM
+// Initialize WASM.
+//
+// The module must be initialised exactly once. Initialising it more than once -
+// and especially concurrently - corrupts wasm-bindgen's memory (double frees,
+// out-of-bounds access). Both the top-level parse path and the Custom Image
+// Manager therefore share this single init promise and the one module instance.
 let wasmInitialized = false;
 let parse_firmware;
+let wasmModule = null;
 
 // Used to autodetect device properties from the connected device and pre-
 // populate the relevant fields in the relevant tabs.
 let detectedDevice = null;
 
-(async function() {
+const wasmReady = (async function() {
     const wasm = await import(ONEROM_WASM_URL);
     await wasm.default();
+    wasmModule = wasm;
     parse_firmware = wasm.parse_firmware;
     wasmInitialized = true;
+    return wasm;
 })();
 
 // MCU variant mapping to firmware values.
@@ -75,6 +136,15 @@ const connectProgramButton = document.getElementById('connectProgramButton');
 const progressBar = document.getElementById('progressBar');
 const connectProgressBar = document.getElementById('connectProgressBar');
 
+// Stop and Run each have two identical controls: one in the Device section and
+// a duplicate beside the Program button (so the user doesn't have to scroll up
+// to realise the device must be Stopped before programming). Each logical
+// button is backed by a LIST of elements that are toggled and wired in
+// lockstep; a shared click handler drives every element in the list. Adding a
+// third location later is just adding its ID here - no logic changes needed.
+const stopButtons = ['stopBtn', 'progStopBtn'].map(id => document.getElementById(id));
+const runButtons = ['runBtn', 'progRunBtn'].map(id => document.getElementById(id));
+
 // Get references to tab elements
 const tabButtons = document.querySelectorAll('.tab-button');
 const tabInputs = document.querySelectorAll('.tab-input');
@@ -97,36 +167,34 @@ function updateDeviceButtons() {
     const inRunMode = dfu.isRunMode();
     const canRun = detectedDevice?.canRun ?? false;
 
-    document.getElementById('stopBtn').classList.toggle('hidden', !inRunMode);
-    document.getElementById('runBtn').classList.toggle('hidden', inRunMode || !canRun);
+    stopButtons.forEach(btn => btn.classList.toggle('hidden', !inRunMode));
+    runButtons.forEach(btn => btn.classList.toggle('hidden', inRunMode || !canRun));
 
     // Programming only valid in stopped mode
     updateProgramButtonForCurrentTab();
 }
 
 async function stopDevice() {
-    const stopBtn = document.getElementById('stopBtn');
-    stopBtn.disabled = true;
+    stopButtons.forEach(btn => btn.disabled = true);
     try {
         await dfu.reboot(true);
         await connectAndRead();
     } catch (error) {
         alert('Failed to stop device: ' + (error.message || error));
     } finally {
-        stopBtn.disabled = false;
+        stopButtons.forEach(btn => btn.disabled = false);
     }
 }
 
 async function runDevice() {
-    const runBtn = document.getElementById('runBtn');
-    runBtn.disabled = true;
+    runButtons.forEach(btn => btn.disabled = true);
     try {
         await dfu.reboot(false);
         await connectAndRead();
     } catch (error) {
         alert('Failed to run device: ' + (error.message || error));
     } finally {
-        runBtn.disabled = false;
+        runButtons.forEach(btn => btn.disabled = false);
     }
 }
 
@@ -701,14 +769,27 @@ const CustomImageManager = {
     selectedBoard: null,
     selectedMcu: null,
     excludedRomTypes: [], // Global exclude list (empty for now)
+
+    // Plugins (Fire only). pluginCatalog is the WASM PluginCatalog handle,
+    // loaded lazily the first time the Fire model is selected. The selected
+    // plugins hold { name, url, sha256, version } or null.
+    pluginCatalog: null,
+    pluginCatalogLoaded: false,
+    selectedSystemPlugin: null,
+    selectedUserPlugin: null,
+    // User INTENT (chosen plugin name; '' means None), tracked separately from
+    // the <select> value so it survives repopulation on re-detect. See the
+    // architectural notes at the top of this file. System defaults to USB.
+    systemPluginIntent: 'usb',
+    userPluginIntent: '',
     
     async init() {
         if (this.wasmInitialized) return;
         
         try {
-            // Import WASM
-            this.wasm = await import(ONEROM_WASM_URL);
-            await this.wasm.default();
+            // Reuse the single shared WASM instance; do NOT initialise the
+            // module again (concurrent/double init corrupts its memory).
+            this.wasm = await wasmReady;
             this.wasmInitialized = true;
             
             // Populate Model dropdown
@@ -761,7 +842,16 @@ const CustomImageManager = {
         
         // Firmware version selection
         document.getElementById('customVersionSelect').addEventListener('change', () => {
+            this.onPluginVersionChange();
             this.updateBuildButton();
+        });
+
+        // Plugin selections
+        document.getElementById('customSystemPluginSelect').addEventListener('change', () => {
+            this.onSystemPluginChange();
+        });
+        document.getElementById('customUserPluginSelect').addEventListener('change', () => {
+            this.onUserPluginChange();
         });
         
         // ROM file upload
@@ -840,6 +930,12 @@ const CustomImageManager = {
         this.resetSelect('customVersionSelect');
         this.resetSelect('customRomTypeSelect');
         this.hideCs();
+
+        // Plugins are Fire-only. Show/hide synchronously and load the catalogue
+        // in the background, so plugin loading never blocks or breaks the
+        // device-config auto-fill that runs through this method.
+        this.showPluginSection(model);
+
         this.updateBuildButton();
     },
     
@@ -917,7 +1013,11 @@ const CustomImageManager = {
             console.error('Error fetching firmware versions:', error);
             alert('Failed to fetch firmware versions');
         }
-        
+
+        // The version was set programmatically above (no change event fires),
+        // so refresh the plugin dropdowns for the newly-selected firmware.
+        this.onPluginVersionChange();
+
         this.updateBuildButton();
     },
     
@@ -1044,6 +1144,14 @@ const CustomImageManager = {
             });
         }
         
+        // Plugin validation: a user plugin requires a system plugin. Show the
+        // reason visibly rather than silently disabling the user control.
+        const pluginMsg = this.getPluginValidationMessage();
+        this.showPluginMessage(pluginMsg);
+        if (pluginMsg) {
+            allFilled = false;
+        }
+
         document.getElementById('customBuildBtn').disabled = !allFilled;
 
         
@@ -1077,16 +1185,22 @@ const CustomImageManager = {
             buildBtn.textContent = 'Building config...';
             const builder = this.wasm.gen_builder_from_json(version, family, configJson);
             
-            // Get file specs
+            // Get file specs. With plugins there is one spec per plugin binary
+            // (by URL) plus one for the ROM (by its in-memory filename).
             const fileSpecs = this.wasm.gen_file_specs(builder);
             console.log('File specs:', fileSpecs);
-            
-            // Add our ROM file (should be only one spec)
-            if (fileSpecs.length !== 1) {
-                throw new Error('Expected exactly one file spec for single ROM');
+
+            // Add each file: the ROM from memory, plugin binaries fetched from
+            // their URLs and SHA-256 verified against the manifest.
+            for (const spec of fileSpecs) {
+                if (spec.source === this.chipFileName) {
+                    this.wasm.gen_add_file(builder, spec.id, Array.from(this.chipFile));
+                } else {
+                    buildBtn.textContent = 'Fetching plugin...';
+                    const bytes = await this.fetchAndVerifyPlugin(spec.source);
+                    this.wasm.gen_add_file(builder, spec.id, Array.from(bytes));
+                }
             }
-            
-            this.wasm.gen_add_file(builder, fileSpecs[0].id, Array.from(this.chipFile));
             
             // Build properties
             const versionParts = version.split('.');
@@ -1163,14 +1277,19 @@ const CustomImageManager = {
             }
         });
         
-        // Build full config
+        // Build full config. Plugin chip_sets come first (system at index 0,
+        // user at index 1), then the ROM set. rom_sets and chip_sets are
+        // synonyms in the config, so array order is slot order.
+        const romSets = this.getPluginChipSets();
+        romSets.push({
+            type: 'single',
+            roms: [romConfig]
+        });
+
         return {
             version: 1,
             description: `Custom single ROM: ${this.chipFileName}`,
-            rom_sets: [{
-                type: 'single',
-                roms: [romConfig]
-            }]
+            rom_sets: romSets
         };
     },
     
@@ -1280,6 +1399,230 @@ const CustomImageManager = {
         const select = document.getElementById(id);
         select.innerHTML = '<option value="">Select...</option>';
         select.disabled = true;
+    },
+
+    // ---- Plugins (Fire only) -------------------------------------------
+
+    // Show or hide the plugins section for the current model. Loading the
+    // catalogue happens in the background (Fire only) and never blocks this.
+    showPluginSection(model) {
+        const section = document.getElementById('customPluginsSection');
+        if (model !== 'Fire') {
+            section.classList.add('hidden');
+            this.selectedSystemPlugin = null;
+            this.selectedUserPlugin = null;
+            this.clearPluginDropdowns();
+            return;
+        }
+        section.classList.remove('hidden');
+        if (this.pluginCatalogLoaded) {
+            this.populatePluginDropdowns();
+        } else {
+            // Fire-and-forget: load then populate. Errors are contained here so
+            // they can never propagate into the device-config flow.
+            this.loadPluginsInBackground();
+        }
+    },
+
+    // Load the catalogue (once) then populate the dropdowns. Self-contained:
+    // any failure is logged, never thrown.
+    async loadPluginsInBackground() {
+        try {
+            await this.initPluginCatalog();
+            this.populatePluginDropdowns();
+        } catch (error) {
+            console.error('Plugin load failed:', error);
+        }
+    },
+
+    clearPluginDropdowns() {
+        document.getElementById('customSystemPluginSelect').innerHTML = '<option value="">None</option>';
+        document.getElementById('customUserPluginSelect').innerHTML = '<option value="">None</option>';
+    },
+
+    // Load the plugin catalogue (once) via the WASM PluginCatalog, which fetches
+    // the manifests through the JS callback below.
+    async initPluginCatalog() {
+        if (this.pluginCatalogLoaded) return;
+        try {
+            this.pluginCatalog = await this.wasm.plugin_catalog(
+                (url) => this.pluginFetchCallback(url)
+            );
+            this.pluginCatalogLoaded = true;
+        } catch (error) {
+            console.error('Failed to load plugin catalogue:', error);
+            this.pluginCatalog = null;
+            // Section stays visible but the dropdowns offer only None.
+        }
+    },
+
+    // JS fetch callback handed to the WASM catalogue loader: (url) => Uint8Array.
+    async pluginFetchCallback(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            throw new Error(`Failed to fetch ${url}: ${resp.status}`);
+        }
+        return new Uint8Array(await resp.arrayBuffer());
+    },
+
+    // Re-populate the plugin dropdowns for the currently-selected firmware
+    // version. Called when the version changes (a plugin may gain or lose a
+    // compatible release).
+    onPluginVersionChange() {
+        const model = document.getElementById('customModelSelect').value;
+        if (model === 'Fire' && this.pluginCatalogLoaded) {
+            this.populatePluginDropdowns();
+        }
+    },
+
+    // Fill both dropdowns with plugins that have a release compatible with the
+    // selected firmware, then re-apply the user's intent (see architectural
+    // notes). Falls back when the intended plugin has no compatible release for
+    // this firmware, but the intent is retained so it reappears when available.
+    populatePluginDropdowns() {
+        const fw = document.getElementById('customVersionSelect').value;
+        const systemSelect = document.getElementById('customSystemPluginSelect');
+        const userSelect = document.getElementById('customUserPluginSelect');
+
+        this.fillPluginSelect(systemSelect, 'system_plugin', fw);
+        this.fillPluginSelect(userSelect, 'user_plugin', fw);
+
+        // Re-apply intent against the newly-available options (system falls back
+        // to USB, user to None). Does NOT change the intent.
+        this.applyPluginIntent(systemSelect, this.systemPluginIntent, 'usb');
+        this.applyPluginIntent(userSelect, this.userPluginIntent, '');
+
+        // Sync the resolved selections from the applied values.
+        this.resolvePluginSelections();
+    },
+
+    // Fill one plugin select with the compatible plugins of the given type.
+    fillPluginSelect(select, pluginType, fw) {
+        select.innerHTML = '<option value="">None</option>';
+        if (!this.pluginCatalog || !fw) return;
+
+        const plugins = this.pluginCatalog.plugins()
+            .filter(p => p.plugin_type === pluginType);
+
+        plugins.forEach(p => {
+            const rel = this.pluginCatalog.newest_compatible(p.name, fw);
+            if (!rel) return;  // no release compatible with this firmware
+            const option = document.createElement('option');
+            option.value = p.name;
+            const display = p.display_name || p.name;
+            option.textContent = `${display} (v${rel.version})`;
+            select.appendChild(option);
+        });
+    },
+
+    // Apply an intent to a select: '' means the user intends None; a name that
+    // is offered is selected; a name that is not offered (no compatible release
+    // for this firmware) falls back, without altering the intent.
+    applyPluginIntent(select, intent, fallback) {
+        if (intent === '') {
+            select.value = '';
+        } else if (select.querySelector(`option[value="${intent}"]`)) {
+            select.value = intent;
+        } else if (fallback && select.querySelector(`option[value="${fallback}"]`)) {
+            select.value = fallback;
+        } else {
+            select.value = '';
+        }
+    },
+
+    // Resolve the selected plugins from the current <select> values, without
+    // touching intent. Called after repopulation.
+    resolvePluginSelections() {
+        this.selectedSystemPlugin = this.resolveSelectedPlugin('customSystemPluginSelect');
+        this.selectedUserPlugin = this.resolveSelectedPlugin('customUserPluginSelect');
+        this.updateBuildButton();
+    },
+
+    // User changed the system dropdown: record the intent, then resolve.
+    onSystemPluginChange() {
+        this.systemPluginIntent = document.getElementById('customSystemPluginSelect').value;
+        this.selectedSystemPlugin = this.resolveSelectedPlugin('customSystemPluginSelect');
+        this.updateBuildButton();
+    },
+
+    // User changed the user dropdown: record the intent, then resolve.
+    onUserPluginChange() {
+        this.userPluginIntent = document.getElementById('customUserPluginSelect').value;
+        this.selectedUserPlugin = this.resolveSelectedPlugin('customUserPluginSelect');
+        this.updateBuildButton();
+    },
+
+    // Resolve the selected plugin in a dropdown to { name, url, sha256, version },
+    // or null if None (or no compatible release).
+    resolveSelectedPlugin(selectId) {
+        const name = document.getElementById(selectId).value;
+        if (!name || !this.pluginCatalog) return null;
+        const fw = document.getElementById('customVersionSelect').value;
+        const rel = this.pluginCatalog.newest_compatible(name, fw);
+        if (!rel) return null;
+        return { name, url: rel.url, sha256: rel.sha256, version: rel.version };
+    },
+
+    // A user plugin requires a system plugin; return the reason to block the
+    // build, or '' when valid.
+    getPluginValidationMessage() {
+        if (this.selectedUserPlugin && !this.selectedSystemPlugin) {
+            return 'A user plugin requires a system plugin. Select a system plugin, or set the user plugin to None.';
+        }
+        return '';
+    },
+
+    showPluginMessage(msg) {
+        const el = document.getElementById('customPluginMessage');
+        el.textContent = msg;
+        el.classList.toggle('visible', !!msg);
+    },
+
+    // Plugin chip_sets for the config: system first (slot 0), user second
+    // (slot 1). Each is a single set with one plugin chip.
+    getPluginChipSets() {
+        const sets = [];
+        if (this.selectedSystemPlugin) {
+            sets.push(this.pluginChipSet(this.selectedSystemPlugin.url, 'system_plugin'));
+        }
+        if (this.selectedUserPlugin) {
+            sets.push(this.pluginChipSet(this.selectedUserPlugin.url, 'user_plugin'));
+        }
+        return sets;
+    },
+
+    pluginChipSet(url, type) {
+        return { type: 'single', roms: [{ file: url, type, size_handling: 'pad' }] };
+    },
+
+    // Fetch a plugin binary and verify its SHA-256 against the manifest digest.
+    async fetchAndVerifyPlugin(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            throw new Error(`Failed to fetch plugin ${url}: ${resp.status}`);
+        }
+        const buffer = await resp.arrayBuffer();
+
+        const expected = this.pluginSha256ForUrl(url);
+        if (expected) {
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashHex = Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0')).join('');
+            if (hashHex !== expected.toLowerCase()) {
+                throw new Error(`Plugin SHA-256 mismatch for ${url}`);
+            }
+        }
+        return new Uint8Array(buffer);
+    },
+
+    pluginSha256ForUrl(url) {
+        if (this.selectedSystemPlugin && this.selectedSystemPlugin.url === url) {
+            return this.selectedSystemPlugin.sha256;
+        }
+        if (this.selectedUserPlugin && this.selectedUserPlugin.url === url) {
+            return this.selectedUserPlugin.sha256;
+        }
+        return null;
     }
 };
 
@@ -1429,9 +1772,12 @@ tabButtons.forEach(button => {
             }
         });
         
-        // Initialize prebuilt manager if pre-built tab is active on load
+        // Initialize the manager for whichever tab is active on load, so a
+        // device connected before any tab switch still auto-fills.
         if (activeTab === 'prebuilt') {
             PrebuiltManager.init();
+        } else if (activeTab === 'custom') {
+            CustomImageManager.init();
         }
     }
 
@@ -1660,8 +2006,8 @@ async function readAndDisplayDeviceInfo() {
     }
 }
 
-document.getElementById('stopBtn').addEventListener('click', stopDevice);
-document.getElementById('runBtn').addEventListener('click', runDevice);
+stopButtons.forEach(btn => btn.addEventListener('click', stopDevice));
+runButtons.forEach(btn => btn.addEventListener('click', runDevice));
 document.getElementById('connectBtn').addEventListener('click', async function() {
     const connectBtn = this;
     const originalText = connectBtn.textContent;
