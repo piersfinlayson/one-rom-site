@@ -145,6 +145,40 @@ class UnifiedProgrammer {
             throw new Error('No device connected');
         }
     }
+
+    /**
+     * Read `length` bytes from an absolute target address.
+     *
+     * Unlike upload(), which reads flash from the flash base, this reads from
+     * an arbitrary address — the parser uses it to follow runtime pointers into
+     * RAM (0x20000000+) on a running device. flashRead() accepts arbitrary
+     * addresses, so the same picoboot command serves both flash and RAM.
+     *
+     * No progress estimation: these reads are small (a few hundred bytes) and
+     * finish quickly, so a progress bar would only flicker.
+     *
+     * @param {number} addr - Absolute target address (e.g. 0x20000200)
+     * @param {number} length - Number of bytes to read
+     * @returns {Promise<Uint8Array>} Exactly `length` bytes at `addr`
+     */
+    async readMemory(addr, length) {
+        if (!this.isConnected()) {
+            await this.connect(false);  // false = use cached if available
+        }
+
+        if (this.deviceType === 'Fire') {
+            // flashRead reads arbitrary addresses, RAM included.
+            return await this.picobootDevice.flashRead(addr, length);
+        } else if (this.deviceType === 'Ice') {
+            // Ice only ever connects in STM32 DFU bootloader mode, so it is
+            // never running and has no live runtime info to read. The parser
+            // will not request RAM for an Ice device, so this should be
+            // unreachable; throw rather than return bad data if it happens.
+            throw new Error('readMemory is not supported on Ice devices');
+        } else {
+            throw new Error('No device connected');
+        }
+    }
     
     /**
      * Program firmware to device

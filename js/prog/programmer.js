@@ -35,29 +35,11 @@
 //    programmatic-repopulate path: user changes fire the 'change' listeners;
 //    populate code sets .value directly and must NOT dispatch 'change'. This
 //    holds today and any general refactor must preserve it.
-//
-// 2. `canRun` uses "system plugin in slot 0" as a proxy for "USB present".
-//    Stop/Run is only meaningful on a device that can be reached over USB while
-//    running, which requires the USB system plugin. detectedDevice.canRun is
-//    currently derived (in readAndDisplayDeviceInfo) from slot 0 being a
-//    SystemPlugin. That holds ONLY while USB is the sole system plugin. If
-//    another system plugin can occupy slot 0, canRun would go true on a board
-//    with no USB control path - Run would then offer to reboot a device the
-//    tool cannot subsequently re-enumerate.
-//
-//    The correct signal is USB-plugin presence, not "any system plugin". The
-//    onerom-fw-parser crate (historically sdrr-fw-parser) already owns this:
-//    ParsedDevice::is_usb_run_capable() is the right home for the check. Today
-//    it uses the SAME proxy (system plugin exists) as this file, so exposing it
-//    over WASM would not fix the issue on its own - but it centralises the logic
-//    in one place. The proper fix is to narrow is_usb_run_capable() to test for
-//    the USB plugin specifically, then have the site consume that flag instead
-//    of deriving canRun from the slot-0 type here.
 // =============================================================================
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.3.13/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.4.0/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -74,6 +56,7 @@ let dfu = new UnifiedProgrammer();
 // Manager therefore share this single init promise and the one module instance.
 let wasmInitialized = false;
 let parse_firmware;
+let resolve_plugin_label;
 let wasmModule = null;
 
 // Used to autodetect device properties from the connected device and pre-
@@ -85,6 +68,7 @@ const wasmReady = (async function() {
     await wasm.default();
     wasmModule = wasm;
     parse_firmware = wasm.parse_firmware;
+    resolve_plugin_label = wasm.resolve_plugin_label;
     wasmInitialized = true;
     return wasm;
 })();
@@ -104,15 +88,6 @@ const mcuVariantMap = {
     'RP2350': { line: 0x0005, storage: 0x07 },  // RP2350 + 2MB flash (also, RP2354)
 };
 
-// Storage size mapping (in bytes)
-const storageSizeMap = {
-    'StorageB': 128 * 1024,
-    'StorageC': 256 * 1024,
-    'StorageE': 512 * 1024,
-    'StorageG': 1024 * 1024,
-    'Storage2MB': 2 * 1024 * 1024,
-};
-
 // Reverse lookup: convert firmware MCU values to variant name
 function getMcuVariantName(line, storage) {
     for (const [variant, values] of Object.entries(mcuVariantMap)) {
@@ -121,12 +96,6 @@ function getMcuVariantName(line, storage) {
         }
     }
     return "Unknown (line=0x" + line.toString(16) + " storage=0x" + storage.toString(16) + ")";
-}
-
-function getMcuVariantFromStrings(line, storage) {
-    if (line && line.toLowerCase().startsWith('rp')) return 'RP2350';
-    const storageLetter = storage.replace('Storage', '');
-    return line + 'R' + storageLetter;
 }
 
 // Reference to the text boxes, button and progress bar
@@ -1876,10 +1845,10 @@ async function applyDetectedDeviceToCustom() {
 
 async function readAndDisplayDeviceInfo() {
     let firmwareData = null;
-    
+
     // Save the original progress handler
     const originalProgressHandler = window.dfuProgressHandler;
-    
+
     // Temporarily replace it to use the connect progress bar
     window.dfuProgressHandler = function(value) {
         connectProgressBar.value = value;
@@ -1888,111 +1857,134 @@ async function readAndDisplayDeviceInfo() {
     try {
         connectBtn.textContent = 'Reading';
 
-        // Read first 64KB of firmware
+        // Read the first 64KB of flash. Metadata - and therefore the plugin/ROM
+        // list - lives within this range for both firmware generations.
         firmwareData = await dfu.upload(65536);
-        
-        // Parse with WASM
-        let parsedInfo = await parse_firmware(firmwareData);
 
-        // Check if we need to read the full chip for old firmware
-        if (parsedInfo.major_version === 0 && parsedInfo.minor_version < 5 && 
-            parsedInfo.parse_errors && parsedInfo.parse_errors.length > 0) {
+        // RAM read callback handed to parse_firmware. The parser calls it to
+        // follow runtime pointers into RAM, which is what lets us report the
+        // active ROM. Only a running Fire has live runtime info, so for anything
+        // else (a stopped Fire in the bootloader, or an Ice device, which is
+        // never running) we reject immediately: the parser then tolerantly
+        // treats the runtime as absent - the device shows as stopped and nothing
+        // is marked active - rather than reading and misinterpreting stale RAM.
+        const canReadRam = dfu.getDeviceType() === 'Fire' && dfu.isRunMode();
+        const readCb = canReadRam
+            ? (addr, len) => dfu.readMemory(addr, len)
+            : () => Promise.reject(new Error('RAM unavailable: device not running'));
+
+        // Parse the flash image; RAM is fetched on demand through readCb.
+        let summary = await parse_firmware(firmwareData, readCb);
+
+        // Pre-v0.5.0 firmware read from a partial dump parses with errors. The
+        // WASM reports the full chip size to re-read; do so and re-parse.
+        if (summary.full_reread_size) {
             connectBtn.textContent = 'Re-reading';
-            console.log('Pre v0.5.0 firmware detected, re-reading full chip for complete info');
-
-            const fullSize = storageSizeMap[parsedInfo.stm_storage];
-            if (fullSize) {
-                // Re-read entire chip
-                firmwareData = await dfu.upload(fullSize);
-
-                // Re-parse with full data
-                parsedInfo = await parse_firmware(firmwareData);
-            } else {
-                console.log('Unknown storage type for full chip read:', parsedInfo.stm_storage);
-            }
-        }
-        
-        // Populate device summary
-        document.getElementById('deviceVersion').textContent = 
-            `${parsedInfo.major_version}.${parsedInfo.minor_version}.${parsedInfo.patch_version}`;
-        document.getElementById('deviceMcu').textContent = 
-            getMcuVariantFromStrings(parsedInfo.stm_line, parsedInfo.stm_storage);
-        
-        if (parsedInfo.rom_sets.length > 0) {
-            const allFilenames = parsedInfo.rom_sets
-                .flatMap(set => set.roms.map(rom => rom.filename))
-                .filter(name => name);
-            
-            const totalRoms = allFilenames.length;
-            const sets = parsedInfo.rom_sets.length;
-            
-            // Show first 3 filenames, then indicate more
-            if (totalRoms <= 3) {
-                document.getElementById('deviceConfig').textContent = allFilenames.join(', ');
-            } else {
-                document.getElementById('deviceConfig').textContent = 
-                    `${allFilenames.slice(0, 3).join(', ')} (+${totalRoms - 3} more in ${sets} set${sets > 1 ? 's' : ''})`;
-            }
-        } else {
-            document.getElementById('deviceConfig').textContent = 'No ROMs';
+            console.log('Pre-v0.5.0 firmware: re-reading full chip for complete info');
+            firmwareData = await dfu.upload(summary.full_reread_size);
+            summary = await parse_firmware(firmwareData, readCb);
         }
 
-        // Store for pre-population of programming tabs
-        if (!parsedInfo.parse_errors || parsedInfo.parse_errors.length === 0) {
-            const mcuString = parsedInfo.stm_line && parsedInfo.stm_line.toLowerCase().startsWith('rp')
-                ? 'RP2350'
-                : getMcuVariantFromStrings(parsedInfo.stm_line, parsedInfo.stm_storage);
-            detectedDevice = {
-                model: mcuString === 'RP2350' ? 'fire' : 'ice',
-                hw_rev: parsedInfo.hw_rev || null,
-                mcu: mcuString,
-            };
-            const firstRom = parsedInfo.rom_sets?.[0]?.roms?.[0];
-            console.log('First ROM type:', firstRom?.rom_type);
-            const canRun = parsedInfo.rom_sets?.length > 0 &&
-                        parsedInfo.rom_sets[0].roms?.length === 1 &&
-                        firstRom?.rom_type === 'SystemPlugin';            detectedDevice.canRun = canRun;
-            applyDetectedDeviceToPrebuilt();
-            applyDetectedDeviceToCustom();
-        }
-
-        if (parsedInfo.parse_errors && parsedInfo.parse_errors.length > 0) {
-            document.getElementById('deviceStatus').textContent = 
-                '⚠ - One ROM firmware corrupt';
-        } else {
-            document.getElementById('deviceStatus').textContent = 
-                '✔ - One ROM firmware good (' + (dfu.isRunMode() ? 'Running' : 'Stopped') + ')';
-        }
-        document.getElementById('devicePcbRevision').textContent =
-            parsedInfo.hw_rev || "Unknown";
-        
-        // Show device summary and details
-        document.getElementById('deviceSummary').classList.remove('hidden');
-        document.getElementById('deviceDetails').classList.remove('hidden');
-        
-        // Populate firmware details
-        document.getElementById('deviceDetailsContent').textContent = 
-            JSON.stringify(parsedInfo, null, 2);
-            
-        connectProgressBar.value = 100;
-
-        updateDeviceButtons();
-    } catch (error) {
-        // If we got firmware data but parsing failed = unrecognized firmware
-        if (firmwareData !== null) {
-            // See if firmwareData is all 0xFF (erased chip)
+        // No version means this is not recognisable One ROM firmware. Tell a
+        // blank (all-0xFF) chip apart from unrecognised contents.
+        if (!summary.version) {
             const allFF = firmwareData.every(byte => byte === 0xFF);
-            if (allFF) {
-                document.getElementById('deviceStatus').textContent = 
-                    '✘ - No firmware (blank/erased chip)';
-            } else {
-                document.getElementById('deviceStatus').textContent = 
-                    '✘ - Unrecognized firmware';
-            }
+            document.getElementById('deviceStatus').textContent = allFF
+                ? '✘ - No firmware (blank/erased chip)'
+                : '✘ - Unrecognized firmware';
             document.getElementById('deviceVersion').textContent = 'Unknown';
             document.getElementById('deviceMcu').textContent = 'Unknown';
             document.getElementById('deviceConfig').textContent = 'N/A';
             document.getElementById('devicePcbRevision').textContent = 'Unknown';
+            document.getElementById('devicePluginsRow').classList.add('hidden');
+            document.getElementById('deviceSummary').classList.remove('hidden');
+            document.getElementById('deviceDetailsContent').textContent = '';
+            document.getElementById('deviceDetails').classList.add('hidden');
+            connectProgressBar.value = 100;
+            updateDeviceButtons();
+            return;
+        }
+
+        // Status: a corrupt parse overrides everything; otherwise the run state
+        // comes from the USB interface (authoritative), not the parse.
+        document.getElementById('deviceStatus').textContent = summary.corrupt
+            ? '⚠ - One ROM firmware corrupt'
+            : '✔ - One ROM firmware good (' + (dfu.isRunMode() ? 'Running' : 'Stopped') + ')';
+
+        document.getElementById('deviceVersion').textContent = summary.version;
+        document.getElementById('deviceMcu').textContent = summary.mcu || 'Unknown';
+        document.getElementById('devicePcbRevision').textContent = summary.hw_rev || 'Unknown';
+
+        // Plugins get their own line, shown only when present. The active entry
+        // (running devices only) is marked. The labels are the raw image
+        // sources at first; upgradePluginLabels then replaces them with friendly
+        // names (manifest display name for official plugins, file stem for
+        // local ones) as those resolve - best-effort, non-blocking.
+        const pluginsRow = document.getElementById('devicePluginsRow');
+        const pluginsEl = document.getElementById('devicePlugins');
+        if (summary.plugins.length > 0) {
+            pluginsEl.textContent = summary.plugins.map(formatRomEntry).join(', ');
+            pluginsRow.classList.remove('hidden');
+            // Fire-and-forget: enhance the labels in the background. A slow or
+            // failed manifest fetch simply leaves the raw label in place.
+            upgradePluginLabels(summary.plugins, pluginsEl);
+        } else {
+            pluginsRow.classList.add('hidden');
+        }
+
+        // ROMs line, truncated to the first three.
+        const romLabels = summary.roms.map(formatRomEntry);
+        if (romLabels.length === 0) {
+            document.getElementById('deviceConfig').textContent = 'No ROMs';
+        } else if (romLabels.length <= 3) {
+            document.getElementById('deviceConfig').textContent = romLabels.join(', ');
+        } else {
+            document.getElementById('deviceConfig').textContent =
+                `${romLabels.slice(0, 3).join(', ')} (+${romLabels.length - 3} more)`;
+        }
+
+        // Store for pre-population of the programming tabs, but only when the
+        // parse was clean. canRun comes straight from the WASM (has the USB
+        // system plugin) rather than being re-derived here.
+        if (!summary.corrupt) {
+            detectedDevice = {
+                model: (summary.model || '').toLowerCase() || null,
+                hw_rev: summary.hw_rev || null,
+                mcu: summary.mcu || null,
+                canRun: summary.can_run,
+            };
+            applyDetectedDeviceToPrebuilt();
+            applyDetectedDeviceToCustom();
+        }
+
+        // Show summary and details.
+        document.getElementById('deviceSummary').classList.remove('hidden');
+        document.getElementById('deviceDetails').classList.remove('hidden');
+
+        // Details pane: the full parse, pretty-printed. Its shape differs by
+        // format (Original vs Schema) - render whatever the dump contains.
+        try {
+            document.getElementById('deviceDetailsContent').textContent =
+                JSON.stringify(JSON.parse(summary.dump), null, 2);
+        } catch {
+            document.getElementById('deviceDetailsContent').textContent = summary.dump;
+        }
+
+        connectProgressBar.value = 100;
+
+        updateDeviceButtons();
+    } catch (error) {
+        // A genuine failure (USB/transport, or a WASM error). If we never got
+        // any firmware data the failure is upstream, so rethrow; otherwise show
+        // it as unrecognised firmware.
+        if (firmwareData !== null) {
+            document.getElementById('deviceStatus').textContent =
+                '✘ - Unrecognized firmware';
+            document.getElementById('deviceVersion').textContent = 'Unknown';
+            document.getElementById('deviceMcu').textContent = 'Unknown';
+            document.getElementById('deviceConfig').textContent = 'N/A';
+            document.getElementById('devicePcbRevision').textContent = 'Unknown';
+            document.getElementById('devicePluginsRow').classList.add('hidden');
             document.getElementById('deviceSummary').classList.remove('hidden');
             document.getElementById('deviceDetailsContent').textContent = "";
             document.getElementById('deviceDetails').classList.add('hidden');
@@ -2004,6 +1996,47 @@ async function readAndDisplayDeviceInfo() {
         window.dfuProgressHandler = originalProgressHandler;
         connectProgressBar.value = 0;
     }
+}
+
+// Format a DeviceSummary ROM/plugin entry for display, appending "(active)" to
+// the slot currently being served (running devices only).
+function formatRomEntry(entry) {
+    return entry.active ? `${entry.label} (active)` : entry.label;
+}
+
+// Fetch callback handed to resolve_plugin_label: (url) => Uint8Array. Mirrors
+// the plugin-catalogue fetch; invoked by the WASM only for official plugins, to
+// retrieve their release manifest. Local plugins never trigger a fetch.
+async function pluginManifestFetch(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+        throw new Error(`Failed to fetch ${url}: ${resp.status}`);
+    }
+    return new Uint8Array(await resp.arrayBuffer());
+}
+
+// Replace each plugin's raw image-source label with a friendly name resolved by
+// the WASM `resolve_plugin_label`, then re-render the plugins line. Best-effort:
+// a plugin that fails to resolve (or an unreachable manifest) keeps its raw
+// label, and the "(active)" marker is preserved throughout. Plugins are passed
+// by their index in the list, which is their slot order (0 = system, 1 = user).
+async function upgradePluginLabels(plugins, element) {
+    if (!resolve_plugin_label) return; // WASM not initialised
+
+    const labels = await Promise.all(
+        plugins.map(async (entry, index) => {
+            try {
+                const info = await resolve_plugin_label(index, entry.label, pluginManifestFetch);
+                const label = info?.label ?? entry.label;
+                return entry.active ? `${label} (active)` : label;
+            } catch {
+                // Keep the raw label on any failure.
+                return formatRomEntry(entry);
+            }
+        })
+    );
+
+    element.textContent = labels.join(', ');
 }
 
 stopButtons.forEach(btn => btn.addEventListener('click', stopDevice));
