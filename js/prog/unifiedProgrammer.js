@@ -21,8 +21,15 @@ const ONEROM_USB_DEVICES = [
 ];
 
 // How long to wait for a device to re-enumerate after a reboot before giving
-// up. Re-enumeration is typically well under a second; this is generous.
-const REBOOT_REENUMERATE_TIMEOUT_MS = 5000;
+// up. Re-enumeration takes well under a second, so this is already generous.
+//
+// It must stay well inside Chrome's transient user activation window (~5s from
+// the click), because the wait cannot distinguish "not back yet" from "this
+// origin has never been granted that PID, so getDevices() will never return it".
+// The second case can only be resolved by a picker, and a picker needs the
+// activation the wait is spending. Waiting longer cannot help either case: the
+// device is back in under a second or the grant does not exist.
+const REBOOT_REENUMERATE_TIMEOUT_MS = 2500;
 
 function isOneRomDevice(device) {
     return ONEROM_USB_DEVICES.some(known =>
