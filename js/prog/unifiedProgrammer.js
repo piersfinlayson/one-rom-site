@@ -325,9 +325,13 @@ class UnifiedProgrammer {
      *
      * The reconnect is silent provided the target mode's PID has been authorised
      * before. Returning to a mode we have already talked to (the usual case -
-     * stop, program, run) always is. Entering a mode for the first time is not,
-     * and returns false so the caller can decide whether to fall back to the
-     * picker.
+     * stop, program, run within one session) always is. Entering a mode for the
+     * first time on this origin is not, and cannot be rescued here: getDevices()
+     * will never return an unauthorised device however long we wait, and only a
+     * picker can grant it - which needs a user activation this call has already
+     * spent. Returns false so the caller can tell the user to press Connect,
+     * whose click is a fresh gesture that can grant it. Callers must NOT respond
+     * by requesting a picker themselves; it will throw.
      *
      * @param {boolean} stopped - true for stopped/bootloader, false for running
      * @returns {Promise<boolean>} true if reconnected, false if the device did

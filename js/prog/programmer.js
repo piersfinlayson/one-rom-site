@@ -218,12 +218,21 @@ async function connectAndRead() {
 
 // Reboot into the requested mode and show what came back, without asking the
 // user to pick the device again: they already chose it, and the reboot only
-// changed the mode it presents as. Falls back to the picker if the device does
-// not reappear as one we are authorised for, which can only happen the first
-// time this origin sees it in that mode.
+// changed the mode it presents as.
+//
+// Deliberately does NOT fall back to the picker when the reattach fails. By that
+// point the click's user activation is gone - spent by the reboot's own connect,
+// or timed out waiting for a device that was never going to appear - so asking
+// for one throws a SecurityError instead of showing anything. The reboot itself
+// has already succeeded, so the honest thing is to say so and let the user's
+// next click be a fresh gesture that can grant the new mode's PID. It only
+// happens once per mode per origin; after that the reattach is silent.
 async function rebootAndRead(stopped) {
     if (!await dfu.rebootAndReconnect(stopped)) {
-        await dfu.connect(true);
+        alert(stopped
+            ? 'One ROM has been stopped, but cannot reconnect automatically.  Press Connect to re-connect manually.'
+            : 'One ROM has been restarted, but cannot reconnect automatically.  Press Connect to re-connect manually.');
+        return;
     }
     await readAndReleaseDevice();
 }
@@ -610,10 +619,12 @@ async function startUpdate() {
         if (wasRunning) {
             dfuStatusHandler('Stopping');
             if (!await dfu.rebootAndReconnect(true)) {
-                // Bootloader mode has never been authorised on this origin, so
-                // the picker is the only way through. We are still within the
-                // Program click's user activation, so it is allowed to appear.
-                await dfu.connect(true);
+                // Cannot recover here: showing a picker needs user activation,
+                // and this click's is long gone - retrieving and parsing the
+                // image happened first. The board is stopped, so a Connect will
+                // authorise the bootloader PID and the next Program is silent.
+                throw ("Error: One ROM has been stopped, but cannot reconnect automatically.  " +
+                       "Press Connect to re-connect manually, then Program again.");
             }
         }
 
@@ -653,11 +664,19 @@ async function startUpdate() {
             } else {
                 dfuStatusHandler('Restarting');
                 if (!await dfu.rebootAndReconnect(false)) {
-                    // The reboot itself succeeded, so the device is running: only
-                    // reattaching failed. Programming is not in doubt, so carry on
-                    // - the refresh below will report the device being unreachable
-                    // accurately enough.
-                    console.log('Restarted, but could not reattach to read it back');
+                    // The reboot succeeded, so the device is running: only
+                    // reattaching failed, which means the running PID has not
+                    // been authorised on this origin yet. Programming is not in
+                    // doubt, so report it as complete - but say plainly why the
+                    // device panel has not refreshed, rather than letting the
+                    // reconnect below fail with something vague.
+                    setTimeout(() => alert('One ROM has been programmed and restarted, but ' +
+                        'cannot reconnect automatically.  Press Connect to re-connect manually.'), 100);
+                    dfuStatusHandler('Complete!');
+                    setTimeout(() => {
+                        dfuStatusHandler('Program');
+                    }, 2000);
+                    return;
                 }
             }
         }
