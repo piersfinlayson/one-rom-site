@@ -510,9 +510,11 @@ button.gold-button:hover {
     text-align: left;
 }
 
-.radio-option input[type="radio"] {
+.radio-option input[type="radio"],
+.radio-option input[type="checkbox"] {
     cursor: pointer;
     margin: 0;
+    padding: 0;
 }
 
 .help-text {
@@ -588,4 +590,3 @@ button.gold-button:hover {
         gap: 1rem;
     }
 }
-

@@ -143,6 +143,9 @@
                             <option value="RP2350">RP2350</option>
                         </select>
                         <input id="fileLocationBox" type="url" placeholder="https://onerom.org/rom/firmware.bin" style="flex-grow: 1; width: 45ch;">
+
+                        <!-- Programming Options is moved here when this tab is shown -->
+                        <div class="programming-options-anchor" data-tab="url"></div>
                     </div>
                     
                     <!-- Local File tab -->
@@ -166,6 +169,9 @@
                         <label for="fileUploadBox" class="file-button">Choose Firmware File</label>
                         <span id="fileName" style="margin-left: 0.5rem; color: var(--text-secondary);">No file selected</span>
                         <input id="fileUploadBox" type="file" accept=".bin" style="display: none;">
+
+                        <!-- Programming Options is moved here when this tab is shown -->
+                        <div class="programming-options-anchor" data-tab="file"></div>
                     </div>
 
                     <!-- Custom Image tab -->
@@ -301,6 +307,9 @@
                             <div id="customPluginMessage" class="config-description"></div>
                         </div>
 
+                        <!-- Programming Options is moved here when this tab is shown -->
+                        <div class="programming-options-anchor" data-tab="custom"></div>
+
                         <!-- Build and Save buttons -->
                         <div style="margin-top: 1rem;">
                             <button id="customBuildBtn" class="gold-button" disabled>Build Firmware</button>
@@ -354,9 +363,24 @@
                             </div>
                         </div>
                         <div id="configDescription" class="config-description"></div>
+
+                        <!-- Programming Options is moved here when this tab is shown -->
+                        <div class="programming-options-anchor" data-tab="prebuilt"></div>
                     </div>
                 </div>
-                
+
+                <!-- One element, not one per tab: it is moved into the active tab's
+                     anchor above, so its state cannot drift between tabs and there
+                     is only ever one id to read. -->
+                <div id="programmingOptions">
+                    <h3>Programming Options</h3>
+                    <label class="radio-option">
+                        <input type="checkbox" id="restartAfterProgram" checked>
+                        <span>Restart One ROM after programming</span>
+                        <span class="help-text" title="Restarts One ROM once programming completes, so you can test it straight away. Ignored on One ROM Ice, and on firmware without a system plugin, as neither can run while USB is attached.">ⓘ</span>
+                    </label>
+                </div>
+
                 <div class="buttons-and-bar">
                     <div class="device-buttons">
                         <button class="gold-button hidden" id="progStopBtn">Stop</button>

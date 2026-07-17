@@ -9,14 +9,21 @@
 // Issues are recorded here so they can be picked up as separate pieces of work.
 //
 // 1. Dropdowns conflate "user intent" with "current display state".
-//    Each <select> (model, PCB, MCU, firmware version, ROM type, size handling,
-//    CS logic, and now the plugin selects) is treated as the source of truth
-//    for what the user chose. But these dropdowns are repopulated whenever the
-//    device is re-detected (e.g. after a flash, applyDetectedDeviceToCustom ->
-//    onModelChange resets the version, then onMcuChange re-selects it). During
-//    that repopulate the option list is briefly emptied and rebuilt, which
-//    discards the current selection before it can be restored - so a user's
-//    choice is silently lost on the next re-detect/repopulate cycle.
+//    Each <select> (model, PCB, MCU, firmware version, ROM type, and now the
+//    plugin selects) is treated as the source of truth for what the user chose.
+//    But these dropdowns are repopulated whenever the device is re-detected
+//    (e.g. after a flash, applyDetectedDeviceToCustom -> onModelChange resets
+//    the version, then onMcuChange re-selects it). During that repopulate the
+//    option list is briefly emptied and rebuilt, which discards the current
+//    selection before it can be restored - so a user's choice is silently lost
+//    on the next re-detect/repopulate cycle.
+//
+//    Note this applies only to fields whose OPTIONS are rebuilt. The CS logic
+//    selects and the size handling radios are static markup - their options are
+//    identical for every board and chip type and are never repopulated - so they
+//    need no intent tracking, and are not part of the general fix below. CS was
+//    lost for an unrelated reason: hideCs() cleared the values as a side effect
+//    of hiding the rows. It no longer does.
 //
 //    The correct model is to track the user's INTENT separately from the
 //    <select> value: only a genuine user change updates the intent, and every
@@ -26,20 +33,122 @@
 //
 //    A NARROW version of this is implemented for the plugin selects only (see
 //    systemPluginIntent / userPluginIntent in CustomImageManager). The GENERAL
-//    fix - applying the same intent-tracking to model/PCB/MCU/version/ROM type/
-//    size handling/CS - is deferred: it is a refactor of the manager's state
-//    model touching every field's change handler, and deserves its own pass
-//    with regression focus, rather than being bolted onto feature work.
+//    fix - applying the same intent-tracking to model/PCB/MCU/version/ROM type -
+//    is deferred: it is a refactor of the manager's state model touching every
+//    field's change handler, and deserves its own pass with regression focus,
+//    rather than being bolted onto feature work.
+//
+//    ROM type is a halfway house today: applyDetectedDeviceToCustom saves and
+//    restores it around the cascade (previousRomType), and updateRomTypes keeps
+//    it if still offered (previousValue). That is preservation, not intent - it
+//    survives a repopulate but a deliberate choice is still overwritten by what
+//    the device reports. The general fix subsumes it.
 //
 //    The pattern relies on the user-change path being distinguishable from the
 //    programmatic-repopulate path: user changes fire the 'change' listeners;
 //    populate code sets .value directly and must NOT dispatch 'change'. This
 //    holds today and any general refactor must preserve it.
+//
+//    The damage is now CONTAINED, though not fixed, by note 2: a build whose
+//    form has been repopulated under it can no longer be programmed or saved.
+//    The user loses their selection and must rebuild, but cannot flash an image
+//    that no longer matches what the page says.
+//
+// 2. Built firmware is only valid for the configuration it was built from.
+//    CustomImageManager.builtFirmware is paired with builtFrom, a signature of
+//    every input the build consumed (configSignature). hasCurrentBuild() gates
+//    Program and Save on the two still agreeing.
+//
+//    This exists because the form changes without the user touching it - see
+//    note 1 - so "the user has not edited anything" is not a safe proxy for
+//    "the image still matches the form". Signature comparison is used in
+//    preference to invalidating on every change event, because the repopulate
+//    after a successful flash re-applies identical values, and binning a
+//    perfectly good image there would be a false positive.
+//
+//    The ROM file is identified by a generation counter, not its name or size:
+//    rebuilding a ROM from source yields the same filename, and ROM images are
+//    a fixed size, so neither can tell two selections apart. Note also that a
+//    file input only fires 'change' when its value differs - and its value is
+//    the path - so onRomFileChange clears it, or re-selecting the same file
+//    after editing it would be silently ignored.
+//
+// 3. A device read performed during an operation must not touch the page.
+//    readAndDisplayDeviceInfo repopulates the tabs via applyDetectedDeviceToCustom
+//    (note 1), which is correct for the Connect button but destroys user state
+//    if called mid-operation. readAndParseDevice is the side-effect-free read,
+//    and is what the pre-programming board check uses. Keep display logic in the
+//    former and reads in the latter; do not call the former from an operation.
+//
+//    readAndParseDevice throws only if the flash could not be READ. Flash that
+//    reads but cannot be interpreted returns a null summary, because callers
+//    treat "I could not talk to the board" and "this board is not running
+//    firmware I understand" very differently.
+//
+// 4. DeviceSummary.can_run means different things on Ice and Fire, and the name
+//    matches neither. It is is_usb_run_capable(): on Fire it reports whether a
+//    system plugin is present; on Ice it is always false, because an Ice only
+//    ever presents as an STM32 DFU bootloader and so can never run over USB.
+//
+//    It does NOT mean "manageable over USB", and it is not the v1 USB DFU
+//    support flag, which the parser does not surface at all - that has to be
+//    read out of the image by hand (assertIceImageSupportsUsb). can_run has
+//    caused three bugs by being assumed to be one of those: it rejected every
+//    Ice image, it made restart-after-programming throw on Ice, and it left the
+//    Run button showing on Ice. Every consumer here works around it; the fix
+//    belongs on the Rust side.
+//
+// 5. The plugin catalogue loads in the background (loadPluginsInBackground),
+//    deliberately, so that a slow or failed fetch cannot block or break the
+//    device auto-fill. The consequence is that selectedSystemPlugin is null
+//    until it lands. Building in that window produces an image with no plugins,
+//    and its signature (note 2) records none - so when the catalogue arrives and
+//    the intent is applied, the build immediately goes stale. Suspected but not
+//    confirmed; hasCurrentBuild() logs which field moved, so the console will
+//    say 'systemPlugin' if this is what has happened.
+//
+// 6. A One ROM's identity is only knowable from the firmware already on it.
+//    There is no hardware identifier to interrogate, so the pre-programming
+//    board check (confirmBoardBeforeProgramming) compares what the board's
+//    CURRENT firmware claims against what the image being flashed is for. Three
+//    consequences follow, and they shape the whole design:
+//
+//    - A board that has already been mis-flashed claims to be whatever was
+//      wrongly put on it. The check therefore fires on exactly the case where
+//      the user is right and the board is lying - de-bricking - and cannot tell
+//      that apart from a user about to make the original mistake. So it WARNS
+//      and allows; blocking would prevent the repair it exists to make rarer.
+//    - A blank or unreadable board cannot be checked at all. That case falls
+//      back to asking the user to check the silkscreen, which is why the
+//      revision letter is derived from the board name (boardRevisionLabel).
+//    - Both sides of the comparison come from parse_firmware, never from the
+//      dropdowns, so the check works identically on all four tabs - including
+//      URL and Local, which only ever knew the MCU.
+//
+//    Writing board identity to the RP2350's OTP is planned. That supersedes all
+//    of this: the board would then answer for itself, the blank-board silkscreen
+//    prompt would apply only to pre-OTP boards, and a mis-flashed board would no
+//    longer be able to lie. Do not invest further here in the meantime.
+//
+// 7. On Fire, the USB PID *is* the run state: f540 stopped, f542 running. Any
+//    lookup that pins the PID a device was last seen with therefore cannot find
+//    it after a reboot - the PID has changed by definition. This is why
+//    UnifiedProgrammer.connect() matches getDevices() against the whole One ROM
+//    PID list (ONEROM_USB_DEVICES) rather than the cached PID, and it is why
+//    Stop and Run used to put up a device picker every single time.
+//
+//    Reconnecting therefore goes through rebootAndReconnect(), which waits for
+//    the device to reappear under a DIFFERENT PID - both because the mode must
+//    change, and to avoid latching onto the outgoing device in the window before
+//    the host notices it detach. It reconnects silently provided the target
+//    mode's PID has been authorised before, which matters because after a flash
+//    there is no user activation left and a picker may not be permitted to
+//    appear at all.
 // =============================================================================
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.4.0/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.4.1/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -73,31 +182,6 @@ const wasmReady = (async function() {
     return wasm;
 })();
 
-// MCU variant mapping to firmware values.
-// The numerical values match the enums in config_base.h.  They are used
-// to verify the selected MCU matches the firmware being programmed.
-const mcuVariantMap = {
-    'F401RB': { line: 0x0004, storage: 0x01 },  // F401BC + B
-    'F401RC': { line: 0x0004, storage: 0x02 },  // F401BC + C
-    'F401RE': { line: 0x0000, storage: 0x04 },  // F401DE + E
-    'F405RG': { line: 0x0001, storage: 0x06 },  // F405 + G
-    'F411RC': { line: 0x0002, storage: 0x02 },  // F411 + C
-    'F411RE': { line: 0x0002, storage: 0x04 },  // F411 + E
-    'F446RC': { line: 0x0003, storage: 0x02 },  // F446 + C
-    'F446RE': { line: 0x0003, storage: 0x04 },  // F446 + E
-    'RP2350': { line: 0x0005, storage: 0x07 },  // RP2350 + 2MB flash (also, RP2354)
-};
-
-// Reverse lookup: convert firmware MCU values to variant name
-function getMcuVariantName(line, storage) {
-    for (const [variant, values] of Object.entries(mcuVariantMap)) {
-        if (values.line === line && values.storage === storage) {
-            return variant;
-        }
-    }
-    return "Unknown (line=0x" + line.toString(16) + " storage=0x" + storage.toString(16) + ")";
-}
-
 // Reference to the text boxes, button and progress bar
 const mcuSelectBox = document.getElementById('mcuSelectBox');
 const pageSizeBox = document.getElementById('pageSizeBox');
@@ -126,7 +210,28 @@ connectProgramButton.addEventListener('click', function () {
 });
 
 async function connectAndRead() {
+    // forcePicker: the Connect button is where the user chooses which device to
+    // talk to, so it always asks. Run and Stop must not - see rebootAndRead.
     await dfu.connect(true);
+    await readAndReleaseDevice();
+}
+
+// Reboot into the requested mode and show what came back, without asking the
+// user to pick the device again: they already chose it, and the reboot only
+// changed the mode it presents as. Falls back to the picker if the device does
+// not reappear as one we are authorised for, which can only happen the first
+// time this origin sees it in that mode.
+async function rebootAndRead(stopped) {
+    if (!await dfu.rebootAndReconnect(stopped)) {
+        await dfu.connect(true);
+    }
+    await readAndReleaseDevice();
+}
+
+// Read and display the connected device, then let go of it: holding the handle
+// open would stop anything else - including the device itself rebooting - from
+// using it.
+async function readAndReleaseDevice() {
     await readAndDisplayDeviceInfo();
     await dfu.disconnect();
     document.getElementById('connectBtn').textContent = 'Reconnect';
@@ -136,18 +241,21 @@ function updateDeviceButtons() {
     const inRunMode = dfu.isRunMode();
     const canRun = detectedDevice?.canRun ?? false;
 
-    stopButtons.forEach(btn => btn.classList.toggle('hidden', !inRunMode));
-    runButtons.forEach(btn => btn.classList.toggle('hidden', inRunMode || !canRun));
+    // Running and stopping over USB is Fire-only: Ice always presents in STM32
+    // DFU bootloader mode. canRun cannot stand in for this - on Ice it reports
+    // the v1 USB DFU build flag, which is true for any USB-programmable Ice.
+    const isFire = detectedDevice?.model === 'fire';
 
-    // Programming only valid in stopped mode
+    stopButtons.forEach(btn => btn.classList.toggle('hidden', !isFire || !inRunMode));
+    runButtons.forEach(btn => btn.classList.toggle('hidden', !isFire || inRunMode || !canRun));
+
     updateProgramButtonForCurrentTab();
 }
 
 async function stopDevice() {
     stopButtons.forEach(btn => btn.disabled = true);
     try {
-        await dfu.reboot(true);
-        await connectAndRead();
+        await rebootAndRead(true);
     } catch (error) {
         alert('Failed to stop device: ' + (error.message || error));
     } finally {
@@ -158,8 +266,7 @@ async function stopDevice() {
 async function runDevice() {
     runButtons.forEach(btn => btn.disabled = true);
     try {
-        await dfu.reboot(false);
-        await connectAndRead();
+        await rebootAndRead(false);
     } catch (error) {
         alert('Failed to run device: ' + (error.message || error));
     } finally {
@@ -167,71 +274,225 @@ async function runDevice() {
     }
 }
 
-// Validate firmware binary
-function validateFirmware(fileArr, mcuVariant) {
-    const view = new Uint8Array(fileArr);
-    const infoStructBase = 0x200;
-    
-    // Check for SDRR signature at offset 0x200
-    const expectedSignature = [0x53, 0x44, 0x52, 0x52]; // "SDRR" in ASCII
-    
-    if (fileArr.byteLength < infoStructBase + expectedSignature.length) {
-        throw ("Error: Invalid One ROM .bin file (Firmware file too small - expected \"SDRR\" signature at offset 0x200)");
+// Parse a One ROM firmware image held in memory.
+//
+// Uses the same parser as readAndParseDevice, so the image and the device it is
+// destined for are described by identical code and their fields are directly
+// comparable - no normalisation between the two. It understands both firmware
+// generations: v1 (Original) and v2 (Schema).
+//
+// An in-memory image has no live device behind it, so the RAM read callback
+// rejects. The parser then treats the runtime as absent, exactly as it does for
+// a stopped Fire or an Ice.
+//
+// Returns the parsed DeviceSummary, or null if the image could not be parsed.
+async function parseFirmwareImage(fileArr) {
+    // The parser lives in the WASM module, initialised once at page load. This
+    // runs before any device contact, so it can be reached before that has
+    // resolved. Awaited outside the try: a module that fails to load should
+    // surface as itself, not as an unparseable image.
+    await wasmReady;
+
+    const readCb = () => Promise.reject(new Error('RAM unavailable: not a running device'));
+    try {
+        return await parse_firmware(new Uint8Array(fileArr), readCb);
+    } catch (error) {
+        console.warn('Firmware image parse failed:', error);
+        return null;
     }
-    
-    for (let i = 0; i < expectedSignature.length; i++) {
-        if (view[infoStructBase + i] !== expectedSignature[i]) {
+}
+
+// Validate a firmware image before flashing it. Returns its parsed summary, so
+// the caller can compare the image against the board without parsing twice.
+//
+// Version, corruption, board and MCU all come from the WASM parser, which
+// understands both firmware generations. This previously hand-decoded the v1
+// "SDRR" info struct at fixed offsets to get the MCU - which could only ever
+// describe v1 firmware, and duplicated, less accurately, what the parser does.
+//
+// The one thing still read from the raw image is the Ice USB DFU support flag,
+// which the parser does not surface - see assertIceImageSupportsUsb.
+async function validateFirmware(fileArr, mcuVariant) {
+    const summary = await parseFirmwareImage(fileArr);
+
+    if (summary === null || !summary.version) {
+        throw ("Error: Invalid One ROM .bin file (not recognisable One ROM firmware)");
+    }
+
+    // Parse errors mean we cannot trust anything the image says about itself,
+    // including the board it is for - so it is not a basis for flashing.
+    if (summary.corrupt) {
+        throw ("Error: Invalid One ROM .bin file (" + summary.parse_errors.join('; ') + ")");
+    }
+
+    // MCU: the parser reports the variant for Ice (v1) and the family - always
+    // RP2350 - for Fire (v2). Both forms are exactly what the tabs supply, so
+    // this is a direct comparison.
+    if (!summary.mcu) {
+        throw ("Error: Invalid One ROM .bin file (firmware does not identify its MCU)");
+    }
+
+    if (summary.mcu !== mcuVariant) {
+        throw ("Error: One ROM firmware is for wrong MCU variant (Firmware is for " +
+                summary.mcu + ", expected " + mcuVariant + ")");
+    }
+
+    // Ice only: refuse an image built without USB DFU support. Flash one and the
+    // board can only be recovered with the B0/3V3 jumper, so this is an error,
+    // not a warning.
+    //
+    // This does not apply to Fire, where USB is a plugin: an image without one
+    // simply drops to BOOTSEL when it sees VBUS, so the board stays manageable
+    // and such an image is perfectly valid to flash.
+    //
+    // The board check cannot cover this. A USB-less image built for a USB Ice
+    // board matches that board, so it would pass silently - and the board check
+    // warns rather than blocks in any case.
+    if ((summary.model || '').toLowerCase() === 'ice') {
+        assertIceImageSupportsUsb(new Uint8Array(fileArr));
+    }
+
+    return summary;
+}
+
+// Verify a v1 (Ice) firmware image was built with USB DFU support.
+//
+// The flag is read directly from the image because it is not carried by
+// DeviceSummary, and the device cannot answer for it either: what a board
+// presents as describes the firmware being replaced, not the one going on.
+//
+// Layout, all little-endian:
+//   0x200            v1 info struct, identified by an "SDRR" signature
+//   0x200 + 0x38     pointer to extra_info, as a flash address
+//   extra_info + 4   USB DFU support flag; 1 means supported
+//
+// Hardcoded offsets are normally a poor bet, but the v1 format is frozen - Ice
+// is legacy and no further Ice firmware is expected - so there is nothing left
+// to drift. The signature is checked first precisely because the offsets below
+// are only meaningful if the struct really is where we think it is.
+function assertIceImageSupportsUsb(view) {
+    const INFO_BASE = 0x200;
+    const EXTRA_INFO_PTR = INFO_BASE + 0x38;
+    const STM32_FLASH_BASE = 0x08000000;
+    const SIGNATURE = [0x53, 0x44, 0x52, 0x52];  // "SDRR"
+
+    if (view.length < INFO_BASE + SIGNATURE.length) {
+        throw ("Error: Invalid One ROM .bin file (too small to hold the info struct)");
+    }
+
+    for (let i = 0; i < SIGNATURE.length; i++) {
+        if (view[INFO_BASE + i] !== SIGNATURE[i]) {
             throw ("Error: Invalid One ROM .bin file (missing \"SDRR\" signature at offset 0x200)");
         }
     }
-    
-    // Check MCU line and storage match selected variant
-    const mcuLineOffset = infoStructBase + 0x1C;
-    const mcuStorageOffset = infoStructBase + 0x1E;
-    
-    const mcuLine = view[mcuLineOffset] | (view[mcuLineOffset + 1] << 8);
-    const mcuStorage = view[mcuStorageOffset] | (view[mcuStorageOffset + 1] << 8);
-    
-    const expectedMcu = mcuVariantMap[mcuVariant];
-    if (!expectedMcu) {
-        throw ("Error: Unknown MCU variant selected");
+
+    if (view.length < EXTRA_INFO_PTR + 4) {
+        throw ("Error: Invalid One ROM .bin file (too small to hold an extra_info pointer)");
     }
-    
-    if (mcuLine !== expectedMcu.line || mcuStorage !== expectedMcu.storage) {
-        const actualMcu = getMcuVariantName(mcuLine, mcuStorage);
-        throw ("Error: One ROM firmware is for wrong MCU variant (Firmware is for " + 
-                actualMcu + ", expected " + mcuVariant + ")");
+
+    const pointer = view[EXTRA_INFO_PTR] |
+                    (view[EXTRA_INFO_PTR + 1] << 8) |
+                    (view[EXTRA_INFO_PTR + 2] << 16) |
+                    (view[EXTRA_INFO_PTR + 3] << 24);
+
+    // The pointer is a flash address; turn it into an offset within the image.
+    const extraInfoOffset = pointer - STM32_FLASH_BASE;
+    if (extraInfoOffset < 0 || extraInfoOffset + 5 > view.length) {
+        throw ("Error: Invalid One ROM .bin file (extra_info pointer out of range: 0x" +
+               (pointer >>> 0).toString(16) + ")");
     }
-    
-    // Check USB DFU support flag in extra_info block
-    const pointerOffset = infoStructBase + 0x38;
-    const flashBase = (mcuVariant === 'RP2350') ? 0x10000000 : 0x08000000;
-    
-    // Read pointer (little-endian)
-    if (fileArr.byteLength < pointerOffset + 4) {
-        throw ("Error: Invalid One ROM .bin file (Firmware file too small - cannot read extra_info pointer)");
-    }
-    
-    const pointer = view[pointerOffset] | 
-                    (view[pointerOffset + 1] << 8) | 
-                    (view[pointerOffset + 2] << 16) | 
-                    (view[pointerOffset + 3] << 24);
-    
-    // Convert flash address to file offset
-    const extraInfoOffset = pointer - flashBase;
-    
-    if (extraInfoOffset < 0 || extraInfoOffset + 5 > fileArr.byteLength) {
-        throw ("Error: Invalid One ROM .bin file (Invalid extra_info pointer in firmware 0x" + pointer.toString(16) + ")");
-    }
-    
-    // Check USB DFU support flag at extra_info + 4
-    const usbDfuSupport = view[extraInfoOffset + 4];
-    
-    if (usbDfuSupport !== 1) {
+
+    if (view[extraInfoOffset + 4] !== 1) {
         throw ("Error: One ROM firmware provided does not support USB (Choose a firmware image that supports USB)");
     }
-    
-    return true;
+}
+
+// The board revision is always the final component of the board name
+// (fire-28-c -> C, fire-24-usb-b -> B), and is always silkscreened on the
+// board, although it may be small and its form varies.
+function boardRevisionLabel(boardName) {
+    return boardName.split('-').pop().toUpperCase();
+}
+
+// Text for the case where the board and the image disagree about which board
+// this is.
+function boardMismatchMessage(boardHwRev, imageHwRev) {
+    return 'Board mismatch\n\n' +
+        'The firmware currently on this board says it is a ' + boardHwRev + ', ' +
+        'but you are about to flash firmware for a ' + imageHwRev + '.\n\n' +
+        'You probably only want to do this if this board was previously ' +
+        'flashed with the wrong board\'s firmware, and you are now correcting ' +
+        'that.\n\n' +
+        'If you flash the wrong firmware you will have to de-brick One ROM ' +
+        'before you can flash it again - see "How It Works" on this page for ' +
+        'how.\n\n' +
+        'Continue?';
+}
+
+// Text for the case where the board cannot tell us what it is. There is no
+// hardware identity to read - a One ROM is only identifiable from the firmware
+// already on it - so the user is asked to check the silkscreen instead.
+function boardUnverifiableMessage(imageHwRev) {
+    const rev = boardRevisionLabel(imageHwRev);
+    return 'Board type cannot be checked\n\n' +
+        'This board has no firmware on it, or none that can be read, and a ' +
+        'One ROM can only be identified from the firmware already on it.\n\n' +
+        'You are about to flash firmware for a ' + imageHwRev + ', so please ' +
+        'check the board is marked "' + rev + '". The marking is silkscreened ' +
+        'on the board, but may be small.\n\n' +
+        'If you flash the wrong firmware you will have to de-brick One ROM ' +
+        'before you can flash it again - see "How It Works" on this page for ' +
+        'how.\n\n' +
+        'Continue?';
+}
+
+// Confirm with the user before programming, when the board and the image
+// disagree about which board this is - or when the board cannot tell us.
+//
+// Deliberately warn-and-allow, never block. Flashing an image for a different
+// board is exactly what recovering a mis-flashed board looks like, so refusing
+// would prevent the very repair this check exists to make less necessary. It
+// follows that a mismatch cannot be reported as an error: the board may be the
+// one lying, and we cannot tell the two cases apart.
+//
+// Returns true to proceed with programming, false if the user cancelled.
+async function confirmBoardBeforeProgramming(imageSummary) {
+    // With no board in the image there is nothing to compare, so there is no
+    // basis on which to question the user. Should not arise for an image that
+    // passed validateFirmware.
+    if (!imageSummary.hw_rev) {
+        console.warn('Image does not identify its board - skipping board check');
+        return true;
+    }
+
+    // Re-read the board rather than trusting detectedDevice from Connect: the
+    // user may have swapped boards since. readAndParseDevice leaves the page
+    // alone, so this cannot disturb the user's selections mid-Program.
+    const { summary } = await readAndParseDevice({
+        onPhase: (phase) => dfuStatusHandler(phase)
+    });
+
+    // A board's identity is only knowable from the firmware on it. Blank flash,
+    // an unparseable image, and firmware that records no board all mean the same
+    // thing here: we cannot verify, so we ask the user to check the silkscreen
+    // instead of telling them what they have.
+    //
+    // A parse that hit errors is NOT one of those cases. Errors are recorded
+    // per section ("Hardware Revision", "ROM Sets", "Pins", ...), so a failure
+    // in one says nothing about another: a board reporting fire-24-usb-b whose
+    // ROM sets failed to parse has still told us what it is. hw_rev is present
+    // precisely when its own section parsed, which makes it the right test -
+    // requiring a clean parse threw away an identity we plainly had, and told
+    // the user we could not name a board the panel above had just named.
+    const boardKnown = summary !== null && !!summary.hw_rev;
+
+    if (boardKnown && summary.hw_rev === imageSummary.hw_rev) {
+        return true;
+    }
+
+    return confirm(boardKnown
+        ? boardMismatchMessage(summary.hw_rev, imageSummary.hw_rev)
+        : boardUnverifiableMessage(imageSummary.hw_rev));
 }
 
 // This function runs the update process. It is asynchronous because the operations inside take some time
@@ -323,8 +584,8 @@ async function startUpdate() {
         } else if (activeTab === 'custom') {
             // Custom Image tab: Use built firmware
         
-            if (!CustomImageManager.builtFirmware) {
-                throw ("Error: No firmware built");
+            if (!CustomImageManager.hasCurrentBuild()) {
+                throw ("Error: No firmware built for the current configuration - press Build Firmware");
             }
             
             fileArr = CustomImageManager.builtFirmware.buffer;
@@ -334,19 +595,72 @@ async function startUpdate() {
             throw ("Error: No firmware source provided");
         }
 
-        // Validate firmware before flashing
-        validateFirmware(fileArr, mcuVariant);
+        // Validate the incoming image before touching the device. Its parse is
+        // kept: the board check below compares it against the board itself,
+        // rather than parsing the same bytes twice.
+        const imageSummary = await validateFirmware(fileArr, mcuVariant);
 
-        // Connect and verify device is not running
+        // Connect to the device
         await dfu.connect(false);
-        if (dfu.isRunMode()) {
-            await readAndDisplayDeviceInfo();
-            await dfu.disconnect();
-            throw ("Error: Device is running - press Stop before programming");
+
+        // Programming needs the bootloader, so stop the device if it is running
+        // rather than sending the user away to press Stop themselves. Rebooting
+        // re-enumerates it under a different PID, hence the reconnect.
+        const wasRunning = dfu.isRunMode();
+        if (wasRunning) {
+            dfuStatusHandler('Stopping');
+            if (!await dfu.rebootAndReconnect(true)) {
+                // Bootloader mode has never been authorised on this origin, so
+                // the picker is the only way through. We are still within the
+                // Program click's user activation, so it is allowed to appear.
+                await dfu.connect(true);
+            }
         }
-        
+
+        // Check the image is for this board, warning the user if not - or if
+        // the board cannot say what it is. The user has the final word.
+        if (!await confirmBoardBeforeProgramming(imageSummary)) {
+            // The user has said no to this image, so do not leave it one click
+            // from being flashed: discard it and make them build again. Only
+            // the custom tab has anything to discard - the other tabs hold a
+            // file or a selection, which cancelling does not invalidate.
+            if (activeTab === 'custom') {
+                CustomImageManager.discardBuild();
+            }
+            await dfu.disconnect();
+            dfuDisconnectHandler();
+            return;
+        }
+
         // Run the update sequence (existing code)
         await dfu.runUpdateSequence(fileArr, mcuVariant);
+
+        // Restart the One ROM if asked. Gated on the image we just flashed being
+        // able to run: without a system plugin the firmware drops straight to
+        // BOOTSEL the moment it sees VBUS, so rebooting into it would land us
+        // back in the bootloader having achieved nothing.
+        if (document.getElementById('restartAfterProgram').checked) {
+            const imageModel = (imageSummary.model || '').toLowerCase();
+            if (imageModel !== 'fire') {
+                // Ice only ever presents in STM32 DFU bootloader mode, so it
+                // cannot be told to run over USB at all - reboot() refuses it.
+                // Its can_run reports the v1 USB DFU build flag, which says
+                // nothing about running, so it cannot be used to decide this.
+                console.log('Not restarting: only Fire can be restarted over USB');
+            } else if (!imageSummary.can_run) {
+                console.log('Not restarting: firmware has no system plugin, so it ' +
+                            'cannot run while USB is attached');
+            } else {
+                dfuStatusHandler('Restarting');
+                if (!await dfu.rebootAndReconnect(false)) {
+                    // The reboot itself succeeded, so the device is running: only
+                    // reattaching failed. Programming is not in doubt, so carry on
+                    // - the refresh below will report the device being unreachable
+                    // accurately enough.
+                    console.log('Restarted, but could not reattach to read it back');
+                }
+            }
+        }
 
         // Automatically reconnect and refresh device info
         try {
@@ -734,7 +1048,23 @@ const CustomImageManager = {
     wasm: null,
     chipFile: null,
     chipFileName: null,
+
+    // Bumped on every ROM file selection. Nothing about a file's name or length
+    // distinguishes one selection from the next: rebuilding a ROM from source
+    // produces the same filename, and ROM images are a fixed size, so both are
+    // identical every time. Hashing the contents on each change event would
+    // cost more than it is worth. The generation is exact and free - a fresh
+    // selection is a new generation, whatever the bytes turn out to be.
+    chipFileGeneration: 0,
     builtFirmware: null,
+
+    // The configSignature() at the moment builtFirmware was produced. Any
+    // difference from the current signature means the image is stale.
+    builtFrom: null,
+
+    // Last staleness reported to the console, so the diagnostic in
+    // hasCurrentBuild() reports each change once rather than on every event.
+    lastStaleLogged: null,
     selectedBoard: null,
     selectedMcu: null,
     excludedRomTypes: [], // Global exclude list (empty for now)
@@ -915,23 +1245,28 @@ const CustomImageManager = {
         const boardInfo = this.wasm.board_info(boardName);
         const family = boardInfo.mcu_family;
         
-        // Get MCUs for this family
-        const mcus = this.wasm.mcus_for_mcu_family(family);
-        
+        // Get MCUs for this family. RP2350B is excluded: One ROM uses both
+        // RP2350A and RP2350B silicon, but they share the RP2350 firmware, so
+        // offering B would be a distinction without a difference.
+        const mcus = this.wasm.mcus_for_mcu_family(family)
+            .filter(mcu => mcu.value !== 'RP2350B');
+
         // Populate MCU dropdown
         const mcuSelect = document.getElementById('customMcuSelect');
         mcuSelect.innerHTML = '<option value="">Select...</option>';
         mcus.forEach(mcu => {
-            if (mcu.value !== 'RP2350B') {
-                const option = document.createElement('option');
-                option.value = mcu.value;
-                option.textContent = mcu.pretty;
-                mcuSelect.appendChild(option);
-            }
+            const option = document.createElement('option');
+            option.value = mcu.value;
+            option.textContent = mcu.pretty;
+            mcuSelect.appendChild(option);
         });
         mcuSelect.disabled = false;
-    
-        // Auto-select MCU if only one option available
+
+        // Auto-select the MCU when it is the only one on offer. This must test
+        // the filtered list - the options the user can actually see - not the
+        // raw list from the WASM. The Rp2350 family has two variants but only
+        // one survives the filter, so testing the raw list never fired here and
+        // Fire boards were left with an unselected MCU, and no version.
         if (mcus.length === 1) {
             mcuSelect.value = mcus[0].value;
             await this.onMcuChange(mcus[0].value);
@@ -997,6 +1332,7 @@ const CustomImageManager = {
         if (!file) {
             this.chipFile = null;
             this.chipFileName = null;
+            this.chipFileGeneration++;
             fileNameSpan.textContent = 'No file selected';
             fileNameSpan.classList.remove('selected');
             this.resetSelect('customRomTypeSelect');
@@ -1006,7 +1342,16 @@ const CustomImageManager = {
         
         this.chipFileName = file.name;
         this.chipFile = new Uint8Array(await file.arrayBuffer());
-        
+        this.chipFileGeneration++;
+
+        // Clear the input now the bytes are safely in hand. A file input only
+        // fires change when its value differs, and its value is the path - so
+        // re-selecting the same file after rebuilding it from source fires
+        // nothing, and the old contents stay silently in place. Clearing means
+        // the next selection always fires, same path or not. Nothing else reads
+        // this input's files; the filename is displayed from the captured File.
+        e.target.value = '';
+
         fileNameSpan.textContent = file.name;
         fileNameSpan.classList.add('selected');
         
@@ -1082,14 +1427,98 @@ const CustomImageManager = {
         this.updateBuildButton();
     },
     
+    // Hide the CS rows. Deliberately does NOT clear their values.
+    //
+    // Which rows are shown, and which values reach the config, are both decided
+    // by the chip type's control_lines (see onRomTypeChange and buildConfig) -
+    // never by what a dropdown happens to hold. A hidden row is exactly a row
+    // buildConfig will not read, so leaving its value alone cannot affect a
+    // build. It is simply remembered, and reappears if the user comes back to a
+    // chip type that has that line.
+    //
+    // Clearing here used to lose the user's CS selections on every repopulate:
+    // the auto-fill after a device read calls onModelChange (hides) and then
+    // onRomTypeChange (hides, then re-shows), so the rows came back empty. That
+    // also invalidated any built firmware, since CS is part of configSignature.
     hideCs() {
         ['customCs1Row', 'customCs2Row', 'customCs3Row'].forEach(id => {
-            const row = document.getElementById(id);
-            row.classList.remove('visible');
-            document.getElementById(id.replace('Row', 'Select')).value = '';
+            document.getElementById(id).classList.remove('visible');
         });
     },
     
+    // A snapshot of every input the built firmware is derived from. Compared
+    // against the snapshot taken at build time to tell whether the image in
+    // hand still corresponds to what the form says - see hasCurrentBuild().
+    //
+    // Reads the controls directly rather than going via buildConfig(), which
+    // assumes a complete, valid form and throws on a partial one. This runs on
+    // every change event, valid or not.
+    //
+    // The plugins are identified by URL, not by the select value, because the
+    // URL is what the build actually fetches and embeds. selectedBoard and
+    // selectedMcu are omitted as they are just echoes of the pcb/mcu selects.
+    configSignature() {
+        const value = (id) => document.getElementById(id).value;
+        const sizeHandling = document.querySelector('input[name="customSizeHandling"]:checked');
+
+        return JSON.stringify({
+            model: value('customModelSelect'),
+            pcb: value('customPcbSelect'),
+            mcu: value('customMcuSelect'),
+            version: value('customVersionSelect'),
+            romType: value('customRomTypeSelect'),
+            sizeHandling: sizeHandling ? sizeHandling.value : '',
+            cs: ['customCs1Select', 'customCs2Select', 'customCs3Select'].map(value),
+            systemPlugin: this.selectedSystemPlugin ? this.selectedSystemPlugin.url : '',
+            userPlugin: this.selectedUserPlugin ? this.selectedUserPlugin.url : '',
+            // The generation, not the name or size, is what identifies the ROM
+            // contents - see chipFileGeneration. The name is carried too, since
+            // the build embeds it in the config.
+            romFile: this.chipFileName,
+            romFileGeneration: this.chipFileGeneration
+        });
+    },
+
+    // Whether we hold a built image that still matches the form.
+    //
+    // Truthiness of builtFirmware is not enough: the form can move on after a
+    // build - including when the code repopulates it after a device read - and
+    // an image built from a different configuration must not be programmed or
+    // saved as though it were the current one.
+    hasCurrentBuild() {
+        if (!this.builtFirmware) return false;
+        if (this.builtFrom === this.configSignature()) return true;
+
+        // Report what moved. Without this, a build going stale is indistinguishable
+        // from the tool being broken - and the form can be changed by the code
+        // itself (a device read repopulates it), not just by the user.
+        const stale = this.staleFields().join(', ');
+        if (stale !== this.lastStaleLogged) {
+            console.log('Built firmware is stale - changed since build:', stale);
+            this.lastStaleLogged = stale;
+        }
+        return false;
+    },
+
+    // Which parts of the configuration have moved since the build.
+    staleFields() {
+        if (!this.builtFrom) return [];
+        const was = JSON.parse(this.builtFrom);
+        const now = JSON.parse(this.configSignature());
+        return Object.keys(now).filter(
+            k => JSON.stringify(was[k]) !== JSON.stringify(now[k])
+        );
+    },
+
+    // Throw away the built image, requiring a rebuild before it can be
+    // programmed or saved again.
+    discardBuild() {
+        this.builtFirmware = null;
+        this.builtFrom = null;
+        document.getElementById('customSaveBtn').disabled = true;
+        updateProgramButtonForCurrentTab();
+    },
+
     updateBuildButton() {
         const model = document.getElementById('customModelSelect').value;
         const pcb = document.getElementById('customPcbSelect').value;
@@ -1123,8 +1552,10 @@ const CustomImageManager = {
 
         document.getElementById('customBuildBtn').disabled = !allFilled;
 
-        
-        // Disable Program button - any form change invalidates built firmware
+        // A built image belongs to the form it was built from. Once the form
+        // moves on the image is stale - neither programmable nor worth saving -
+        // until it is rebuilt.
+        document.getElementById('customSaveBtn').disabled = !this.hasCurrentBuild();
         updateProgramButtonForCurrentTab();
     },
     
@@ -1198,6 +1629,8 @@ const CustomImageManager = {
             // Combine base firmware + metadata + ROM images
             buildBtn.textContent = 'Combining...';
             this.builtFirmware = this.combineFirmware(baseFirmware, metadata, romImages);
+            this.builtFrom = this.configSignature();
+            this.lastStaleLogged = null;
             
             console.log('Complete firmware:', this.builtFirmware.length, 'bytes');
             
@@ -1263,7 +1696,7 @@ const CustomImageManager = {
     },
     
     async saveFirmware() {
-        if (!this.builtFirmware) return;
+        if (!this.hasCurrentBuild()) return;
 
         const pcbSelect = document.getElementById('customPcbSelect');
         const pcbName = pcbSelect.options[pcbSelect.selectedIndex].text
@@ -1613,12 +2046,8 @@ function isPrebuiltTabReady() {
 }
 
 function updateProgramButtonForCurrentTab() {
-    console.log('updateProgramButtonForCurrentTab: isRunMode=', dfu.isRunMode());
-    if (dfu.isRunMode()) {
-        connectProgramButton.disabled = true;
-        return;
-    }
-
+    // Run mode is no longer a bar to programming: startUpdate stops the device
+    // itself, and restarts it afterwards if asked.
     const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
     
     if (activeTab === 'url') {
@@ -1628,7 +2057,7 @@ function updateProgramButtonForCurrentTab() {
     } else if (activeTab === 'prebuilt') {
         connectProgramButton.disabled = !isPrebuiltTabReady();
     } else if (activeTab === 'custom') {
-        connectProgramButton.disabled = !CustomImageManager.builtFirmware;
+        connectProgramButton.disabled = !CustomImageManager.hasCurrentBuild();
     }
 }
 
@@ -1681,6 +2110,22 @@ document.getElementById('romConfigSelect')?.addEventListener('change', function(
     updateProgramButtonForCurrentTab();
 });
 
+// Move the Programming Options block into the given tab.
+//
+// The block applies to every tab, but has to appear inside whichever one is
+// showing to read sensibly. Rather than duplicating it per tab - four controls
+// to keep in step, and four ids to choose between when programming - the single
+// element is moved into that tab's anchor. Its state therefore cannot drift
+// between tabs, because there is only one of it.
+function showProgrammingOptionsInTab(targetTab) {
+    const options = document.getElementById('programmingOptions');
+    const anchor = document.querySelector(
+        `.programming-options-anchor[data-tab="${targetTab}"]`);
+    if (anchor && options) {
+        anchor.appendChild(options);
+    }
+}
+
 // Handle tab switching
 tabButtons.forEach(button => {
     button.addEventListener('click', function() {
@@ -1689,6 +2134,8 @@ tabButtons.forEach(button => {
         // Update button states
         tabButtons.forEach(btn => btn.classList.remove('active'));
         this.classList.add('active');
+
+        showProgrammingOptionsInTab(targetTab);
         
         // Show/hide appropriate input
         tabInputs.forEach(input => {
@@ -1731,7 +2178,9 @@ tabButtons.forEach(button => {
     const activeButton = document.querySelector('.tab-button.active');
     if (activeButton) {
         const activeTab = activeButton.getAttribute('data-tab');
-        
+
+        showProgrammingOptionsInTab(activeTab);
+
         // Show only the active tab's content
         tabInputs.forEach(input => {
             if (input.getAttribute('data-tab') === activeTab) {
@@ -1843,9 +2292,93 @@ async function applyDetectedDeviceToCustom() {
     }
 }
 
-async function readAndDisplayDeviceInfo() {
-    let firmwareData = null;
+// Read the board's current firmware from flash and parse it.
+//
+// Deliberately free of page side effects: it touches neither the DOM nor
+// detectedDevice, and so does not repopulate the programming tabs. That makes
+// it safe to call mid-Program, where a repopulate would discard the user's
+// selections (see the architectural notes at the top of this file). Callers
+// that want to display the result do so themselves.
+//
+// Phase changes ('Reading', 'Re-reading') are reported through onPhase so each
+// caller can route them to its own control. Upload progress is not handled
+// here: it goes to window.dfuProgressHandler, which the caller owns.
+//
+// Returns { summary, firmwareData }:
+//   - summary        the parsed DeviceSummary, or null if the flash contents
+//                    could not be parsed at all
+//   - firmwareData   the raw flash read, always present
+//
+// Throws ONLY if the flash could not be read (USB/transport failure). Flash
+// that reads fine but cannot be interpreted is reported as a null summary, so
+// callers can tell "I could not talk to the board" apart from "the board is
+// not running firmware I understand" - a distinction they act on differently.
+async function readAndParseDevice({ onPhase = () => {} } = {}) {
+    onPhase('Reading');
 
+    // Read the first 64KB of flash. Metadata - and therefore the plugin/ROM
+    // list - lives within this range for both firmware generations.
+    let firmwareData = await dfu.upload(65536);
+
+    // RAM read callback handed to parse_firmware. The parser calls it to
+    // follow runtime pointers into RAM, which is what lets us report the
+    // active ROM. Only a running Fire has live runtime info, so for anything
+    // else (a stopped Fire in the bootloader, or an Ice device, which is
+    // never running) we reject immediately, rather than reading and
+    // misinterpreting stale RAM.
+    //
+    // Rejecting is not an error: both parsers log the failed read and carry on
+    // with no runtime, so the device simply shows as stopped with nothing
+    // marked active. It does not make the parse corrupt.
+    const canReadRam = dfu.getDeviceType() === 'Fire' && dfu.isRunMode();
+    const readCb = canReadRam
+        ? (addr, len) => dfu.readMemory(addr, len)
+        : () => Promise.reject(new Error('RAM unavailable: device not running'));
+
+    // Parse the flash image; RAM is fetched on demand through readCb. A parse
+    // error means unrecognisable contents, not a failure to read, so it is
+    // contained here rather than thrown.
+    const tryParse = async (data) => {
+        try {
+            return await parse_firmware(data, readCb);
+        } catch (error) {
+            console.warn('Firmware parse failed:', error);
+            return null;
+        }
+    };
+
+    let summary = await tryParse(firmwareData);
+    if (summary === null) return { summary: null, firmwareData };
+
+    // Pre-v0.5.0 firmware read from a partial dump parses with errors. The
+    // WASM reports the full chip size to re-read; do so and re-parse. An upload
+    // failure here is still a read failure and propagates.
+    if (summary.full_reread_size) {
+        onPhase('Re-reading');
+        console.log('Pre-v0.5.0 firmware: re-reading full chip for complete info');
+        firmwareData = await dfu.upload(summary.full_reread_size);
+        summary = await tryParse(firmwareData);
+    }
+
+    return { summary, firmwareData };
+}
+
+// Render the device summary for a board whose firmware we cannot interpret:
+// everything but the status line is unknown, and the details pane is hidden
+// because there is nothing to put in it.
+function displayUninterpretableFirmware(status) {
+    document.getElementById('deviceStatus').textContent = status;
+    document.getElementById('deviceVersion').textContent = 'Unknown';
+    document.getElementById('deviceMcu').textContent = 'Unknown';
+    document.getElementById('deviceConfig').textContent = 'N/A';
+    document.getElementById('devicePcbRevision').textContent = 'Unknown';
+    document.getElementById('devicePluginsRow').classList.add('hidden');
+    document.getElementById('deviceSummary').classList.remove('hidden');
+    document.getElementById('deviceDetailsContent').textContent = '';
+    document.getElementById('deviceDetails').classList.add('hidden');
+}
+
+async function readAndDisplayDeviceInfo() {
     // Save the original progress handler
     const originalProgressHandler = window.dfuProgressHandler;
 
@@ -1855,52 +2388,24 @@ async function readAndDisplayDeviceInfo() {
     };
 
     try {
-        connectBtn.textContent = 'Reading';
+        const { summary, firmwareData } = await readAndParseDevice({
+            onPhase: (phase) => { connectBtn.textContent = phase; }
+        });
 
-        // Read the first 64KB of flash. Metadata - and therefore the plugin/ROM
-        // list - lives within this range for both firmware generations.
-        firmwareData = await dfu.upload(65536);
-
-        // RAM read callback handed to parse_firmware. The parser calls it to
-        // follow runtime pointers into RAM, which is what lets us report the
-        // active ROM. Only a running Fire has live runtime info, so for anything
-        // else (a stopped Fire in the bootloader, or an Ice device, which is
-        // never running) we reject immediately: the parser then tolerantly
-        // treats the runtime as absent - the device shows as stopped and nothing
-        // is marked active - rather than reading and misinterpreting stale RAM.
-        const canReadRam = dfu.getDeviceType() === 'Fire' && dfu.isRunMode();
-        const readCb = canReadRam
-            ? (addr, len) => dfu.readMemory(addr, len)
-            : () => Promise.reject(new Error('RAM unavailable: device not running'));
-
-        // Parse the flash image; RAM is fetched on demand through readCb.
-        let summary = await parse_firmware(firmwareData, readCb);
-
-        // Pre-v0.5.0 firmware read from a partial dump parses with errors. The
-        // WASM reports the full chip size to re-read; do so and re-parse.
-        if (summary.full_reread_size) {
-            connectBtn.textContent = 'Re-reading';
-            console.log('Pre-v0.5.0 firmware: re-reading full chip for complete info');
-            firmwareData = await dfu.upload(summary.full_reread_size);
-            summary = await parse_firmware(firmwareData, readCb);
+        // Flash read, but the contents could not be parsed at all.
+        if (summary === null) {
+            displayUninterpretableFirmware('✘ - Unrecognized firmware');
+            updateDeviceButtons();
+            return;
         }
 
         // No version means this is not recognisable One ROM firmware. Tell a
         // blank (all-0xFF) chip apart from unrecognised contents.
         if (!summary.version) {
             const allFF = firmwareData.every(byte => byte === 0xFF);
-            document.getElementById('deviceStatus').textContent = allFF
+            displayUninterpretableFirmware(allFF
                 ? '✘ - No firmware (blank/erased chip)'
-                : '✘ - Unrecognized firmware';
-            document.getElementById('deviceVersion').textContent = 'Unknown';
-            document.getElementById('deviceMcu').textContent = 'Unknown';
-            document.getElementById('deviceConfig').textContent = 'N/A';
-            document.getElementById('devicePcbRevision').textContent = 'Unknown';
-            document.getElementById('devicePluginsRow').classList.add('hidden');
-            document.getElementById('deviceSummary').classList.remove('hidden');
-            document.getElementById('deviceDetailsContent').textContent = '';
-            document.getElementById('deviceDetails').classList.add('hidden');
-            connectProgressBar.value = 100;
+                : '✘ - Unrecognized firmware');
             updateDeviceButtons();
             return;
         }
@@ -1943,19 +2448,24 @@ async function readAndDisplayDeviceInfo() {
                 `${romLabels.slice(0, 3).join(', ')} (+${romLabels.length - 3} more)`;
         }
 
-        // Store for pre-population of the programming tabs, but only when the
-        // parse was clean. canRun comes straight from the WASM (has the USB
-        // system plugin) rather than being re-derived here.
-        if (!summary.corrupt) {
-            detectedDevice = {
-                model: (summary.model || '').toLowerCase() || null,
-                hw_rev: summary.hw_rev || null,
-                mcu: summary.mcu || null,
-                canRun: summary.can_run,
-            };
-            applyDetectedDeviceToPrebuilt();
-            applyDetectedDeviceToCustom();
-        }
+        // Store for pre-population of the programming tabs. canRun comes straight
+        // from the WASM (has the USB system plugin) rather than being re-derived
+        // here.
+        //
+        // Not gated on a clean parse: errors are recorded per section, so a
+        // device whose ROM sets failed to parse can still have reported its
+        // board and MCU perfectly well. Refusing to pre-populate on any error
+        // left such a device's tabs on their defaults - pointing the user at
+        // the wrong board. Each field is used only when it is present, which is
+        // the same test.
+        detectedDevice = {
+            model: (summary.model || '').toLowerCase() || null,
+            hw_rev: summary.hw_rev || null,
+            mcu: summary.mcu || null,
+            canRun: summary.can_run,
+        };
+        applyDetectedDeviceToPrebuilt();
+        applyDetectedDeviceToCustom();
 
         // Show summary and details.
         document.getElementById('deviceSummary').classList.remove('hidden');
@@ -1970,28 +2480,8 @@ async function readAndDisplayDeviceInfo() {
             document.getElementById('deviceDetailsContent').textContent = summary.dump;
         }
 
-        connectProgressBar.value = 100;
-
         updateDeviceButtons();
-    } catch (error) {
-        // A genuine failure (USB/transport, or a WASM error). If we never got
-        // any firmware data the failure is upstream, so rethrow; otherwise show
-        // it as unrecognised firmware.
-        if (firmwareData !== null) {
-            document.getElementById('deviceStatus').textContent =
-                '✘ - Unrecognized firmware';
-            document.getElementById('deviceVersion').textContent = 'Unknown';
-            document.getElementById('deviceMcu').textContent = 'Unknown';
-            document.getElementById('deviceConfig').textContent = 'N/A';
-            document.getElementById('devicePcbRevision').textContent = 'Unknown';
-            document.getElementById('devicePluginsRow').classList.add('hidden');
-            document.getElementById('deviceSummary').classList.remove('hidden');
-            document.getElementById('deviceDetailsContent').textContent = "";
-            document.getElementById('deviceDetails').classList.add('hidden');
-        } else {
-            throw error;
-        }
-    }  finally {
+    } finally {
         // Always restore the original handler
         window.dfuProgressHandler = originalProgressHandler;
         connectProgressBar.value = 0;

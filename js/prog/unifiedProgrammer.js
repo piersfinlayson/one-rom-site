@@ -2,6 +2,33 @@
 //
 // MIT License
 
+// Before changing connect(), reboot() or rebootAndReconnect(), read note 7 in
+// the architectural notes at the top of programmer.js: device identity here is
+// subtler than it looks, and getting it wrong puts a device picker in front of
+// the user on every Stop and Run.
+
+// Every VID/PID a One ROM can present as.
+//
+// The Fire PID encodes the run state - f540 stopped, f542 running - so it
+// changes whenever the device reboots. Anything that looks the device up by the
+// PID it was last seen with therefore cannot find it after a reboot, which is
+// why reconnection matches against this list rather than the last-seen PID.
+const ONEROM_USB_DEVICES = [
+    { vendorId: 0x0483, productId: 0xdf11 },  // STM32 DFU (Ice)
+    { vendorId: 0x2e8a, productId: 0x000f },  // RP2350 Picoboot (Fire)
+    { vendorId: 0x1209, productId: 0xf540 },  // One ROM Fire Bootloader
+    { vendorId: 0x1209, productId: 0xf542 }   // One ROM Fire
+];
+
+// How long to wait for a device to re-enumerate after a reboot before giving
+// up. Re-enumeration is typically well under a second; this is generous.
+const REBOOT_REENUMERATE_TIMEOUT_MS = 5000;
+
+function isOneRomDevice(device) {
+    return ONEROM_USB_DEVICES.some(known =>
+        known.vendorId === device.vendorId && known.productId === device.productId);
+}
+
 // Unified device programmer supporting both Ice (STM32) and Fire (RP2350)
 class UnifiedProgrammer {
     constructor() {
@@ -30,17 +57,38 @@ class UnifiedProgrammer {
      * @returns {Promise<void>}
      */
     async connect(forcePicker = false) {
+        // Already connected, and not being asked to choose a device: there is
+        // nothing to do. Without this, connecting again builds a second device
+        // object on top of the first - which happens whenever a caller reattaches
+        // and something downstream connects again to read the device back. The
+        // only thing that drops a connection underneath us is reboot(), which
+        // disconnects and clears deviceType, so this cannot mask a stale handle.
+        if (this.isConnected() && !forcePicker) {
+            return;
+        }
+
         let usbDevice;
         
         // If we have a previously authorised device and aren't forcing the picker,
         // try to get a *fresh* handle via getDevices() rather than reusing the
         // stale cached object (which becomes invalid after a physical unplug/replug).
         if (!forcePicker && this.cachedUsbDevice) {
+            // Look for any authorised One ROM rather than the exact PID we saw
+            // last: a reboot changes the PID, so matching it would miss the very
+            // device we just rebooted. getDevices() only ever returns devices
+            // the user has already authorised for this origin, so this cannot
+            // reach a device they have not approved.
             const devices = await navigator.usb.getDevices();
-            const refreshed = devices.find(d =>
-                d.vendorId === this.cachedUsbDevice.vendorId &&
-                d.productId === this.cachedUsbDevice.productId
-            );
+
+            // Prefer the same physical device where the serial identifies it, so
+            // that having two One ROMs attached does not silently reconnect to
+            // the wrong one. Not every mode reports a serial, so fall back to
+            // any One ROM.
+            const serial = this.cachedUsbDevice.serialNumber;
+            const refreshed =
+                (serial && devices.find(d => isOneRomDevice(d) && d.serialNumber === serial)) ||
+                devices.find(isOneRomDevice);
+
             if (refreshed) {
                 usbDevice = refreshed;
                 this.cachedUsbDevice = refreshed;  // keep cache current
@@ -55,12 +103,7 @@ class UnifiedProgrammer {
             // Show picker...
             try {
                 usbDevice = await navigator.usb.requestDevice({
-                    filters: [
-                        { vendorId: 0x0483, productId: 0xdf11 },  // STM32 DFU (Ice)
-                        { vendorId: 0x2e8a, productId: 0x000f },  // RP2350 Picoboot (Fire)
-                        { vendorId: 0x1209, productId: 0xf540 },  // One ROM Fire Bootloader
-                        { vendorId: 0x1209, productId: 0xf542 }  // One ROM Fire
-                    ]
+                    filters: ONEROM_USB_DEVICES
                 });
                 
                 this.cachedUsbDevice = usbDevice;
@@ -263,6 +306,70 @@ class UnifiedProgrammer {
         await this.disconnect();
     }
     
+    /**
+     * Reboot into stopped (bootloader) or running (application) mode, then
+     * reconnect once the device has re-enumerated.
+     *
+     * reboot() leaves us disconnected, and the device reappears under a
+     * different PID a short time later. Callers that need to keep working with
+     * the device - programming a running One ROM, or restarting it afterwards -
+     * need it back, silently: by the time a flash has finished there is no user
+     * activation left, so a picker may not even be permitted to appear.
+     *
+     * The reconnect is silent provided the target mode's PID has been authorised
+     * before. Returning to a mode we have already talked to (the usual case -
+     * stop, program, run) always is. Entering a mode for the first time is not,
+     * and returns false so the caller can decide whether to fall back to the
+     * picker.
+     *
+     * @param {boolean} stopped - true for stopped/bootloader, false for running
+     * @returns {Promise<boolean>} true if reconnected, false if the device did
+     *          not reappear as an authorised device within the timeout
+     */
+    async rebootAndReconnect(stopped) {
+        const previousPid = this.cachedUsbDevice ? this.cachedUsbDevice.productId : null;
+
+        await this.reboot(stopped);
+
+        const device = await this._waitForReenumeration(previousPid);
+        if (!device) {
+            return false;
+        }
+
+        this.cachedUsbDevice = device;
+        await this.connect(false);
+        return true;
+    }
+
+    /**
+     * Wait for a One ROM to appear on the bus under a PID other than the one
+     * given.
+     *
+     * The PID encodes the mode, so a reboot must change it. Requiring a change
+     * also avoids latching onto the outgoing device in the moment between the
+     * reboot command being accepted and the host noticing the detach.
+     *
+     * @private
+     * @param {number|null} previousPid - PID before the reboot, if known
+     * @returns {Promise<USBDevice|null>} the device, or null on timeout
+     */
+    async _waitForReenumeration(previousPid) {
+        const deadline = Date.now() + REBOOT_REENUMERATE_TIMEOUT_MS;
+
+        for (;;) {
+            const devices = await navigator.usb.getDevices();
+            const device = devices.find(d =>
+                isOneRomDevice(d) && d.productId !== previousPid);
+            if (device) {
+                return device;
+            }
+            if (Date.now() >= deadline) {
+                return null;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+
     /**
      * Get device information
      * @returns {Object}
