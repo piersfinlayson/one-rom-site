@@ -496,7 +496,7 @@ sudo udevadm trigger</code></pre>
                     <li>Only the device you select when you hit "Connect" or "Program" can be accessed by this page's javascript code - your other USB devices are not visible to it.  None of your devices, including your chosen one, are visible to the server.</li>
                     <li>The page's javascript code implements the STM32 DFU and RP2350 PICOBOOT protocols, performing the necessary flash load, erase and programming operations on your One ROM USB.</li>
                     <li>The firmware on your One ROM USB can only be updated when it is in programming mode.  This is automatically enabled when you plug in One ROM to a USB host, like a PC, unless you have a completely "fresh from the factory", or bricked, One ROM USB.</li>
-                    <li style="list-style-type: none;">If you have factory fresh, or bricked, One ROM USB, you need to manually put it into programming mode before flashing, by jumping B0 and 3V3 (Ice) or B and GND (Fire) on the underside of One ROM, while plugging it into USB.</li>
+                    <li style="list-style-type: none;">If you have factory fresh, or bricked, One ROM USB, you need to manually put it into programming mode before flashing, by jumping B0 and 3V3 (Ice) or top middle header pin and GND (most recent Fire boards) on the underside of One ROM, while plugging it into USB.</li>
                     <li style="list-style-type: none;">One ROM's status LED is lit dimly when in programming mode.</li>
                 </ul>
             </details>
