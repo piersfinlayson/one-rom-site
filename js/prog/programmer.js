@@ -1095,6 +1095,11 @@ const CustomImageManager = {
     pluginCatalogLoaded: false,
     selectedSystemPlugin: null,
     selectedUserPlugin: null,
+    // Plugin binaries fetched (and SHA-256 verified) up front by URL, so that
+    // buildConfig can pick each plugin's size_handling from its actual length,
+    // and the file-spec loop can reuse the bytes rather than fetching twice.
+    // Populated per build by prefetchPlugins(); a Map<url, Uint8Array>.
+    pluginBytes: null,
     // User INTENT (chosen plugin name; '' means None), tracked separately from
     // the <select> value so it survives repopulation on re-detect. See the
     // architectural notes at the top of this file. System defaults to USB.
@@ -1584,6 +1589,11 @@ const CustomImageManager = {
         buildBtn.textContent = 'Building...';
         
         try {
+            // Fetch plugin binaries first: buildConfig needs each plugin's
+            // actual length to choose its size_handling (see pluginChipSet).
+            buildBtn.textContent = 'Fetching plugins...';
+            await this.prefetchPlugins();
+
             // Build JSON config
             const config = this.buildConfig();
             const configJson = JSON.stringify(config);
@@ -1615,8 +1625,11 @@ const CustomImageManager = {
                 if (spec.source === this.chipFileName) {
                     this.wasm.gen_add_file(builder, spec.id, Array.from(this.chipFile));
                 } else {
-                    buildBtn.textContent = 'Fetching plugin...';
-                    const bytes = await this.fetchAndVerifyPlugin(spec.source);
+                    // Plugin: already fetched and verified by prefetchPlugins().
+                    const bytes = this.pluginBytes.get(spec.source);
+                    if (!bytes) {
+                        throw new Error(`Plugin not pre-fetched: ${spec.source}`);
+                    }
                     this.wasm.gen_add_file(builder, spec.id, Array.from(bytes));
                 }
             }
@@ -2013,7 +2026,50 @@ const CustomImageManager = {
     },
 
     pluginChipSet(url, type) {
-        return { type: 'single', roms: [{ file: url, type, size_handling: 'pad' }] };
+        const bytes = this.pluginBytes.get(url);
+        if (!bytes) {
+            throw new Error(`Plugin not pre-fetched: ${url}`);
+        }
+        const size_handling = this.pluginSizeHandling(type, bytes.length);
+        return { type: 'single', roms: [{ file: url, type, size_handling }] };
+    },
+
+    // Choose size_handling for a plugin binary. Plugins come from the
+    // catalogue with a verified SHA-256, so the "wrong image" risk that pad's
+    // strictness guards against does not apply here: a binary that exactly
+    // fills the slot is legitimate. Pad when smaller than the slot; use none
+    // when it exactly fills it (pad would reject a zero-length pad). A plugin
+    // larger than its slot must never happen, so it is a hard error.
+    pluginSizeHandling(type, length) {
+        // chip_type_info() resolves names via ChipType::try_from_str, which
+        // accepts a plugin's PascalCase key but not the snake_case form used
+        // in the config (only serde deserialisation accepts the latter). Map
+        // to the key it accepts so the slot size stays a real lookup.
+        const chipType = { system_plugin: 'SystemPlugin', user_plugin: 'UserPlugin' }[type];
+        if (!chipType) {
+            throw new Error(`Unknown plugin type: ${type}`);
+        }
+        const slotSize = this.wasm.chip_type_info(chipType).size_bytes;
+        if (length > slotSize) {
+            throw new Error(
+                `Plugin '${type}' is ${length} bytes, larger than its ` +
+                `${slotSize}-byte slot`);
+        }
+        return length === slotSize ? 'none' : 'pad';
+    },
+
+    // Fetch and SHA-256 verify every selected plugin binary up front, caching
+    // them by URL in this.pluginBytes. Done before buildConfig so size_handling
+    // can be chosen from each plugin's real length, and so the later file-spec
+    // loop reuses these bytes rather than fetching a second time.
+    async prefetchPlugins() {
+        this.pluginBytes = new Map();
+        for (const plugin of [this.selectedSystemPlugin, this.selectedUserPlugin]) {
+            if (plugin) {
+                const bytes = await this.fetchAndVerifyPlugin(plugin.url);
+                this.pluginBytes.set(plugin.url, bytes);
+            }
+        }
     },
 
     // Fetch a plugin binary and verify its SHA-256 against the manifest digest.
