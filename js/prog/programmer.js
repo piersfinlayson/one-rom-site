@@ -8,51 +8,53 @@
 // This file has grown organically and would benefit from a focused refactor.
 // Issues are recorded here so they can be picked up as separate pieces of work.
 //
-// 1. Dropdowns conflate "user intent" with "current display state".
-//    Each <select> (model, PCB, MCU, firmware version, ROM type, and now the
-//    plugin selects) is treated as the source of truth for what the user chose.
-//    But these dropdowns are repopulated whenever the device is re-detected
-//    (e.g. after a flash, applyDetectedDeviceToCustom -> onModelChange resets
-//    the version, then onMcuChange re-selects it). During that repopulate the
-//    option list is briefly emptied and rebuilt, which discards the current
-//    selection before it can be restored - so a user's choice is silently lost
-//    on the next re-detect/repopulate cycle.
+// 1. The state model conflates "user intent" with "current display state".
+//    There is no single place that stores "what the user chose" separately
+//    from "what the <select> currently shows".
+//    On every re-detect (e.g. after a flash) applyDetectedDeviceToCustom
+//    rebuilds model -> PCB -> MCU -> version -> ROM type from the connected
+//    device, emptying and repopulating each dropdown. With no stored intent, a
+//    repopulate can only reconstruct a selection from whatever source it
+//    happens to consult.
 //
-//    Note this applies only to fields whose OPTIONS are rebuilt. The CS logic
-//    selects and the size handling radios are static markup - their options are
-//    identical for every board and chip type and are never repopulated - so they
-//    need no intent tracking, and are not part of the general fix below. CS was
-//    lost for an unrelated reason: hideCs() cleared the values as a side effect
-//    of hiding the rows. It no longer does.
+//    Today this is harmless for model, PCB, MCU and ROM type - but ONLY because
+//    a re-read returns exactly what the user just programmed, so the device
+//    report and the user's choice coincide. That is a property of the domain,
+//    not a guarantee of the design. The one deliberate override - debrick,
+//    setting fields by hand to flash a device that reports nothing useful -
+//    self-corrects once flashed.
 //
-//    The correct model is to track the user's INTENT separately from the
-//    <select> value: only a genuine user change updates the intent, and every
-//    repopulate re-applies the intent against the newly-available options
-//    (selecting it if still offered, else falling back WITHOUT forgetting the
-//    intent). This makes selections "sticky" across re-detects.
+//    Where intent genuinely diverges from the device, it has been patched
+//    field by field rather than modelled once:
+//      - version:  versionIntent (upgrade, or testing a build not yet latest)
+//      - plugins:  systemPluginIntent / userPluginIntent (a build-time choice
+//                  the device read does not dictate)
+//      - ROM type: previousRomType + updateRomTypes' previousValue - preservation
+//                  across a repopulate, which suffices only because of the
+//                  read-back convergence above
+//    Three overlapping ad-hoc mechanisms now do by hand what one intent model
+//    would do once.
 //
-//    A NARROW version of this is implemented for the plugin selects only (see
-//    systemPluginIntent / userPluginIntent in CustomImageManager). The GENERAL
-//    fix - applying the same intent-tracking to model/PCB/MCU/version/ROM type -
-//    is deferred: it is a refactor of the manager's state model touching every
-//    field's change handler, and deserves its own pass with regression focus,
-//    rather than being bolted onto feature work.
+//    Why this stays a KNOWN ISSUE and is not "done": any new field, or any
+//    detection path that does not report back exactly what was programmed,
+//    reintroduces the silent-loss bug and needs yet another bolt-on. The
+//    eventual fix is a single intent model - store intent per field on genuine
+//    user change; on every repopulate re-apply it against the available options
+//    (keep it if still offered, else fall back WITHOUT forgetting it). It is
+//    deferred, not unnecessary: deferred because the damage is contained (see
+//    note 2 - a build whose form was repopulated under it can no longer be
+//    programmed or saved, so a stale selection forces a rebuild rather than a
+//    wrong flash), not because the conflation has gone away.
 //
-//    ROM type is a halfway house today: applyDetectedDeviceToCustom saves and
-//    restores it around the cascade (previousRomType), and updateRomTypes keeps
-//    it if still offered (previousValue). That is preservation, not intent - it
-//    survives a repopulate but a deliberate choice is still overwritten by what
-//    the device reports. The general fix subsumes it.
+//    Any such mechanism relies on the user-change path being distinguishable
+//    from the programmatic-repopulate path: user changes fire the 'change'
+//    listeners; populate code sets .value directly and must NOT dispatch
+//    'change'. versionIntent and the plugin intents already depend on this.
 //
-//    The pattern relies on the user-change path being distinguishable from the
-//    programmatic-repopulate path: user changes fire the 'change' listeners;
-//    populate code sets .value directly and must NOT dispatch 'change'. This
-//    holds today and any general refactor must preserve it.
-//
-//    The damage is now CONTAINED, though not fixed, by note 2: a build whose
-//    form has been repopulated under it can no longer be programmed or saved.
-//    The user loses their selection and must rebuild, but cannot flash an image
-//    that no longer matches what the page says.
+//    (CS logic selects and the size handling radios are static markup - their
+//    options never change, so they are never repopulated and need no handling.
+//    CS was once lost for an unrelated reason: hideCs() cleared the values as a
+//    side effect of hiding the rows; it no longer does.)
 //
 // 2. Built firmware is only valid for the configuration it was built from.
 //    CustomImageManager.builtFirmware is paired with builtFrom, a signature of
@@ -1105,6 +1107,13 @@ const CustomImageManager = {
     // architectural notes at the top of this file. System defaults to USB.
     systemPluginIntent: 'usb',
     userPluginIntent: '',
+    // User INTENT for the firmware version: the version the user explicitly
+    // chose, or null if they have never picked one. Set only by a genuine
+    // 'change' on the version select - the programmatic repopulate in
+    // onMcuChange sets .value without dispatching 'change', so it never
+    // touches this. onMcuChange re-applies it so an explicit choice survives
+    // re-detects (e.g. after a flash) instead of snapping back to latest.
+    versionIntent: null,
     
     async init() {
         if (this.wasmInitialized) return;
@@ -1164,7 +1173,10 @@ const CustomImageManager = {
         });
         
         // Firmware version selection
-        document.getElementById('customVersionSelect').addEventListener('change', () => {
+        document.getElementById('customVersionSelect').addEventListener('change', (e) => {
+            // A genuine user pick. Record it as intent (null for the empty
+            // placeholder) so it survives future repopulates in onMcuChange.
+            this.versionIntent = e.target.value || null;
             this.onPluginVersionChange();
             this.updateBuildButton();
         });
@@ -1259,6 +1271,11 @@ const CustomImageManager = {
         // device-config auto-fill that runs through this method.
         this.showPluginSection(model);
 
+        // The MCU variant selector is redundant for Fire (always RP2350): the
+        // single-MCU path in onPcbChange sets the value regardless, so the row
+        // only adds noise. Hide it for Fire; Ice keeps it.
+        this.showMcuRow(model);
+
         this.updateBuildButton();
     },
     
@@ -1330,8 +1347,13 @@ const CustomImageManager = {
                 versionSelect.appendChild(option);
             });
             
-            // Default to latest if available
-            if (compatible.includes(data.latest)) {
+            // Re-apply the user's explicit version choice if they made one and
+            // it is still offered - so it survives re-detects - otherwise
+            // default to latest. versionIntent is null until a genuine user
+            // change, so an untouched picker always lands on latest.
+            if (this.versionIntent && compatible.includes(this.versionIntent)) {
+                versionSelect.value = this.versionIntent;
+            } else if (compatible.includes(data.latest)) {
                 versionSelect.value = data.latest;
             }
             
@@ -1836,6 +1858,14 @@ const CustomImageManager = {
     },
 
     // ---- Plugins (Fire only) -------------------------------------------
+
+    // Show or hide the MCU variant row for the current model. Fire is always
+    // RP2350, so the selector is redundant and hidden; the value is still set
+    // by onPcbChange's single-MCU path. Ice keeps the row.
+    showMcuRow(model) {
+        document.getElementById('customMcuRow')
+            .classList.toggle('hidden', model === 'Fire');
+    },
 
     // Show or hide the plugins section for the current model. Loading the
     // catalogue happens in the background (Fire only) and never blocks this.
