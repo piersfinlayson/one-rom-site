@@ -156,7 +156,7 @@
         async function loadWasm() {
             try {
                 // Adjust path to your WASM module
-                const module = await import('https://wasm.onerom.org/releases/v0.4.1/pkg/onerom_wasm.js');
+                const module = await import('https://wasm.onerom.org/releases/v0.4.2/pkg/onerom_wasm.js');
                 //const module = await import('http://localhost:8000/pkg/onerom_wasm.js');
                 await module.default();
                 wasmModule = module;
@@ -242,10 +242,10 @@
             // Control lines
             romInfo.control_lines.forEach(cl => {
                 const name = cl.name.toUpperCase();
-                pinMap.set(cl.pin, { 
-                    type: 'control', 
+                pinMap.set(cl.pin, {
+                    type: 'control',
                     name: name,
-                    configurable: cl.configurable,
+                    csType: cl.cs_type,
                     addressLine: null,
                     dataLine: null
                 });
@@ -423,7 +423,12 @@
             } else if (pinInfo.type === 'data') {
                 content += ` (Data Line ${pinInfo.dataLine})`;
             } else if (pinInfo.type === 'control') {
-                content += pinInfo.configurable ? ' (Configurable)' : ' (Fixed Active-Low)';
+                const csLabels = {
+                    configurable: ' (Configurable)',
+                    fixed_active_low: ' (Fixed Active-Low)',
+                    fixed_active_high: ' (Fixed Active-High)'
+                };
+                content += csLabels[pinInfo.csType] || '';
             } else if (pinInfo.type === 'programming') {
                 content += ` (Read: ${pinInfo.readState})`;
             }

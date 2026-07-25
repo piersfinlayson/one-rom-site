@@ -150,7 +150,7 @@
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.4.1/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.4.2/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -1136,7 +1136,11 @@ const CustomImageManager = {
             
             // Setup event listeners
             this.setupEventListeners();
-            
+
+            // Build the File Format radio group from the formats onerom-gen
+            // supports, so it stays in step with the crate automatically.
+            this.populateFileFormats();
+
             await applyDetectedDeviceToCustom();
         } catch (error) {
             console.error('Error initializing Custom Image Manager:', error);
@@ -1192,6 +1196,13 @@ const CustomImageManager = {
         // ROM file upload
         document.getElementById('customRomFile').addEventListener('change', async (e) => {
             await this.onRomFileChange(e);
+        });
+
+        // Load address is a build input (part of configSignature), so a change
+        // can make a built image stale - updateBuildButton reflects that. The
+        // file-format radios are wired as they are created (populateFileFormats).
+        document.getElementById('customLoadAddress').addEventListener('input', () => {
+            this.updateBuildButton();
         });
         
         // ROM type selection
@@ -1390,6 +1401,14 @@ const CustomImageManager = {
         this.chipFile = new Uint8Array(await file.arrayBuffer());
         this.chipFileGeneration++;
 
+        // Auto-select the file format from the extension, user-overridable. The
+        // format is explicit (not sniffed from the bytes) - this only sets the
+        // default selection, which the user can change before building.
+        const wanted = /\.(hex|ihex|ihx|mcs)$/i.test(file.name) ? 'ihex' : 'binary';
+        const radio = document.querySelector(`input[name="customFileFormat"][value="${wanted}"]`);
+        if (radio) radio.checked = true;
+        this.updateIhexUi();
+
         // Clear the input now the bytes are safely in hand. A file input only
         // fires change when its value differs, and its value is the path - so
         // re-selecting the same file after rebuilding it from source fires
@@ -1409,6 +1428,68 @@ const CustomImageManager = {
         this.updateBuildButton();
     },
     
+    // Build the File Format radio group from wasm.file_formats(). Each format
+    // carries its config value ("binary"/"ihex"), a display label and whether
+    // it is the default - so the group, and the default selection, follow
+    // onerom-gen without being hard-coded here.
+    populateFileFormats() {
+        const group = document.getElementById('customFormatGroup');
+        group.innerHTML = '';
+        this.wasm.file_formats().forEach(fmt => {
+            const option = document.createElement('label');
+            option.className = 'radio-option';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'customFileFormat';
+            input.value = fmt.value;
+            if (fmt.is_default) input.checked = true;
+            input.addEventListener('change', () => {
+                this.updateIhexUi();
+                this.updateBuildButton();
+            });
+
+            const span = document.createElement('span');
+            span.textContent = fmt.label;
+
+            option.appendChild(input);
+            option.appendChild(span);
+            group.appendChild(option);
+        });
+    },
+
+    // The currently-selected file format's config value, defaulting to raw
+    // binary if the group has not been populated yet.
+    selectedFileFormat() {
+        const checked = document.querySelector('input[name="customFileFormat"]:checked');
+        return checked ? checked.value : 'binary';
+    },
+
+    // Show the load-address row only when Intel HEX is selected. It is not
+    // meaningful for a raw binary, and irrelevant even for most Intel HEX files
+    // (only those whose data sits at a non-zero base address need it).
+    updateIhexUi() {
+        const isIhex = this.selectedFileFormat() === 'ihex';
+        document.getElementById('customLoadAddressRow').classList.toggle('hidden', !isIhex);
+    },
+
+    // A clear message if the Intel HEX inputs are invalid, else null. Only the
+    // load address can be wrong: blank, decimal, 0x-hex or $-hex, matching
+    // onerom-gen's LoadAddress::parse_str exactly so the web and the CLI accept
+    // the same set of values.
+    ihexValidationMessage() {
+        if (this.selectedFileFormat() !== 'ihex') return null;
+        const raw = document.getElementById('customLoadAddress').value.trim();
+        if (raw === '') return null;
+        const valid = /^\$[0-9a-fA-F]+$/.test(raw)      // $E000
+            || /^0[xX][0-9a-fA-F]+$/.test(raw)          // 0xE000
+            || /^[0-9]+$/.test(raw);                    // 57344 (decimal)
+        return valid ? null
+            : `Invalid load address "${raw}". Enter a decimal value (e.g. 57344), ` +
+              `0x-prefixed hex (e.g. 0xE000) or $-prefixed hex (e.g. $E000), ` +
+              `or leave it blank for 0.`;
+    },
+
     updateRomTypes() {
         if (!this.selectedBoard) {
             this.resetSelect('customRomTypeSelect');
@@ -1461,7 +1542,7 @@ const CustomImageManager = {
         // Show CS rows based on control lines
         let csCount = 0;
         chipInfo.control_lines.forEach(line => {
-            if (line.configurable) {
+            if (line.cs_type === 'configurable') {
                 csCount++;
                 const csRow = document.getElementById(`customCs${csCount}Row`);
                 if (csRow) {
@@ -1514,6 +1595,10 @@ const CustomImageManager = {
             version: value('customVersionSelect'),
             romType: value('customRomTypeSelect'),
             sizeHandling: sizeHandling ? sizeHandling.value : '',
+            // File format and load address both feed the build, so a change to
+            // either must invalidate a built image.
+            fileFormat: this.selectedFileFormat(),
+            loadAddress: value('customLoadAddress').trim(),
             cs: ['customCs1Select', 'customCs2Select', 'customCs3Select'].map(value),
             systemPlugin: this.selectedSystemPlugin ? this.selectedSystemPlugin.url : '',
             userPlugin: this.selectedUserPlugin ? this.selectedUserPlugin.url : '',
@@ -1607,6 +1692,15 @@ const CustomImageManager = {
     
     async buildFirmware() {
         const buildBtn = document.getElementById('customBuildBtn');
+
+        // Validate the Intel HEX load address up front, so a malformed value
+        // gives a clear message here rather than a raw decode error from gen.
+        const ihexErr = this.ihexValidationMessage();
+        if (ihexErr) {
+            alert(ihexErr);
+            return;
+        }
+
         buildBtn.disabled = true;
         buildBtn.textContent = 'Building...';
         
@@ -1721,12 +1815,28 @@ const CustomImageManager = {
             type: chipType,
             size_handling: sizeHandling
         };
-        
+
+        // Non-binary file format: tell gen how to decode the uploaded bytes (it
+        // does the decoding during build(); the raw file bytes are handed over
+        // unchanged via gen_add_file). Binary is the default, so it is left
+        // implicit. For Intel HEX, the load address is emitted only when the
+        // file places its data at a non-zero base - blank means 0.
+        const fileFormat = this.selectedFileFormat();
+        if (fileFormat !== 'binary') {
+            romConfig.format = fileFormat;
+        }
+        if (fileFormat === 'ihex') {
+            const loadAddress = document.getElementById('customLoadAddress').value.trim();
+            if (loadAddress) {
+                romConfig.load_address = loadAddress;
+            }
+        }
+
         // Add CS lines if configured
         const chipInfo = this.wasm.chip_type_info(chipType);
         let csIndex = 1;
         chipInfo.control_lines.forEach(line => {
-            if (line.configurable) {
+            if (line.cs_type === 'configurable') {
                 const csValue = document.getElementById(`customCs${csIndex}Select`).value;
                 romConfig[`cs${csIndex}`] = csValue;
                 csIndex++;

@@ -225,7 +225,21 @@
 
                                 <label for="customRomFile" class="file-button" style="margin-top: 0rem; margin-bottom: 0.5rem;">Upload ROM Image</label>
                                 <span id="customRomFileName">No file selected</span>
-                                <input id="customRomFile" type="file" accept=".bin,.rom" style="display: none;">
+                                <input id="customRomFile" type="file" accept=".bin,.rom,.hex,.ihex,.ihx,.mcs" style="display: none;">
+
+                                <div class="select-row">
+                                    <label>File Format:</label>
+                                    <!-- Populated from wasm.file_formats() so new formats appear
+                                         automatically; see CustomImageManager.populateFileFormats(). -->
+                                    <div class="radio-group" id="customFormatGroup"></div>
+                                    <span class="help-text" title="How the uploaded file is interpreted. Binary is a raw ROM image; Intel HEX is a .hex/.ihex text file, decoded before use. Auto-selected from the file's extension — change it to override.">ⓘ</span>
+                                </div>
+
+                                <div class="select-row hidden" id="customLoadAddressRow">
+                                    <label>Load address:</label>
+                                    <input id="customLoadAddress" type="text" placeholder="0x0000" style="width: 16ch;">
+                                    <span class="help-text" title="Only needed if the Intel HEX file holds its data at a non-zero base address. Set this to that base — the address the ROM was assembled at (e.g. 0xE000) — and it is subtracted from every record so that address becomes byte 0 of the ROM. Leave blank if the file's data starts at address 0. Accepts decimal (57344), 0x-hex (0xE000), or $-hex ($E000).">ⓘ</span>
+                                </div>
 
                                 <div class="select-row">
                                     <label>ROM Type:</label>
