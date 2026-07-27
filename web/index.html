@@ -116,6 +116,9 @@
 
             <!-- Update tab navigation to include Pre-built -->
             <div class="tab-navigation">
+                <!-- One ROM Builder (multi-slot). Custom stays the default active
+                     tab for now; flip when One ROM Builder is out of beta. -->
+                <button class="tab-button" data-tab="builder">One ROM Builder<span class="tab-new">NEW</span></button>
                 <button class="tab-button active" data-tab="custom">Custom ROM Image</button>
                 <button class="tab-button" data-tab="file">Local Firmware Image</button>
                 <button class="tab-button" data-tab="url">URL Firmware Image</button>
@@ -124,6 +127,99 @@
 
             <div class="tab-content-container">
                 <div class="entry-boxes">
+                    <!-- ROM Slot Builder tab. Builds a multi-slot image: several
+                         ROM images, one selected at power-on by the board's
+                         image-select jumpers. Fire-only (v2 schema / 0.7.0+), so
+                         no Model or MCU selector. SlotBuilderManager (in
+                         programmer.js) owns every id below and its own intent.
+                         The anchor lets the shared #programmingOptions block move
+                         in when this tab is shown, exactly as the other tabs do. -->
+                    <div class="tab-input" data-tab="builder" style="display: none;">
+                        <div id="slotBuilder">
+                            <details class="sb-help">
+                                <summary>Help</summary>
+                                <p style="margin: 0.6rem 0 0.7rem;">
+                                    This tab supports One ROM Fire and firmware versions v0.7.0 onwards.
+                                </p>
+                                <p style="margin: 0 0 0.7rem;">
+                                    Program One ROM for one or more ROM images, with the board's slot select jumpers choosing which image One ROM serves at power on.
+                                </p>
+                                <p style="margin: 0 0 0.8rem;">
+                                    One image <b>per slot</b>, of any supported ROM type. The slot select jumpers encode the slot number in binary: all open is Slot 0, and the right-most jumper is the least significant bit.
+                                </p>
+                                <div class="sb-jlegend" id="slotLegend"></div>
+                                <p style="margin: 0.9rem 0 0;">
+                                    For banked sets, or more than one image per slot, use <a href="/cli/" target="_blank">One ROM CLI</a>, or <a href="/studio/" target="_blank">One ROM Studio</a> with a <a href="https://github.com/piersfinlayson/one-rom/blob/main/onerom-config/README.md" target="_blank">ROM config JSON file</a>.
+                                </p>
+                            </details>
+                            <hr>
+
+                            <h3>Device Configuration</h3>
+                            <div class="sb-device-grid">
+                                <label>One ROM Type:</label>
+                                <div class="sb-pcb-row">
+                                    <select id="slotPcbSelect"><option value="">Select...</option></select>
+                                    <button id="slotDetectBtn" class="sb-detect-btn" type="button">Detect</button>
+                                </div>
+                                <label>Firmware Version:</label>
+                                <select id="slotVersionSelect" disabled><option value="">Select...</option></select>
+                            </div>
+                            <div class="sb-note" id="slotDeviceNote"></div>
+                            <div class="sb-note" id="slotVersionMessage"></div>
+
+                            <hr>
+
+                            <h3>ROM Slots</h3>
+
+                            <div class="sb-cap-wrap" id="slotCapWrap">
+                                <div class="sb-cap-head">
+                                    <span>Flash usage <span class="sb-count" id="slotCount"></span></span>
+                                    <span class="sb-figs" id="slotCapFigs"></span>
+                                </div>
+                                <div class="sb-cap-bar" id="slotCapBar"></div>
+                                <div class="sb-cap-legend">
+                                    <span><i class="sb-swatch" style="background:var(--cyan)"></i>Firmware</span>
+                                    <span><i class="sb-swatch" style="background:var(--bronze)"></i>Plugin</span>
+                                    <span><i class="sb-swatch" style="background:var(--one-rom-gold)"></i>ROM image</span>
+                                    <span><i class="sb-swatch" style="background:var(--input-bg-color)"></i>Free</span>
+                                </div>
+                            </div>
+
+                            <div class="sb-slots" id="slotList"></div>
+
+                            <div class="sb-add-row">
+                                <button class="gold-button" id="slotAddBtn">+ Add ROM Slot</button>
+                                <span class="sb-hint-inline" id="slotAddHint"></span>
+                            </div>
+
+                            <hr>
+
+                            <h3>Plugins</h3>
+                            <div class="sb-plugins-grid">
+                                <label>System Plugin:</label>
+                                <select id="slotSystemPluginSelect"><option value="">None</option></select>
+                                <label>User Plugin:</label>
+                                <select id="slotUserPluginSelect"><option value="">None</option></select>
+                            </div>
+                            <div class="sb-note" id="slotPluginMessage"></div>
+
+                            <hr>
+
+                            <h3>Programming</h3>
+
+                            <!-- Programming Options is moved here when this tab is shown -->
+                            <div class="programming-options-anchor" data-tab="builder"></div>
+
+                            <!-- Build and Save buttons (the Program button is C2) -->
+                            <div class="sb-build-row">
+                                <button id="slotBuildBtn" class="gold-button" disabled>Build Firmware</button>
+                                <button id="slotSaveBtn" class="gold-button" disabled>Save Firmware</button>
+                            </div>
+                            <div class="sb-prog-note" id="slotProgNote"></div>
+                            <div class="sb-warn" id="slotOverWarn" style="display:none;"></div>
+                        </div>
+                    </div>
+
                     <!-- URL tab -->
                     <div class="tab-input" data-tab="url" style="display: none;">
                         <p style="margin-top: 0rem; margin-bottom: 1rem;">

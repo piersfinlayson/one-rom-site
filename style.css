@@ -22,6 +22,14 @@
     --one-rom-gold-darker2: #e6a000;
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    /* ROM Slot Builder palette (board wireframe, jumper cells, flash tally) */
+    --wire: #7a7a86;
+    --cyan: #2fb6cf;
+    --power: #b0563a;
+    --bronze: #8a6a2f;
+    --danger: #e5484d;
+    --danger-dim: #7a2a2d;
+    --mono: 'Courier New', Consolas, monospace;
 }
 
 * {
@@ -132,6 +140,11 @@ ol li {
     gap: 1rem;
     align-items: center;
 }
+
+/* The ROM Slot Builder is a full-width form: pin it to fill the tab container so
+   its width never tracks content (which otherwise jumps as slot cards gain/lose
+   fields). Builder-only - the other tabs stay content-sized. */
+.entry-boxes > .tab-input[data-tab="builder"] { flex: 1; min-width: 0; }
 
 button {
     padding: 0.75rem 1.5rem;
@@ -271,6 +284,21 @@ a:hover {
     border-bottom: 1px solid var(--bg-secondary);
     position: relative;
     z-index: 1;
+}
+
+/* "NEW" pill on the Image Builder tab: outline in the site gold. Colour set
+   explicitly so the global `* { color }` rule doesn't knock it to text colour. */
+.tab-button .tab-new {
+    display: block;
+    width: fit-content;
+    margin: 5px auto 0;
+    padding: 1px 6px;
+    border: 1px solid var(--one-rom-gold);
+    border-radius: 999px;
+    color: var(--one-rom-gold);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
 }
 
 .tab-content-container {
@@ -590,3 +618,483 @@ button.gold-button:hover {
         gap: 1rem;
     }
 }
+
+/* =============================================================================
+   ROM Slot Builder tab
+   -----------------------------------------------------------------------------
+   Ported from the locked mockup (.design/rom-slot-builder-mockup.html). Every
+   class is namespaced `sb-*` and every rule is scoped under `#slotBuilder`, so
+   nothing here can match (or be matched by) an existing site rule - the compact
+   builder look survives the site's global `input, select` margins/padding, and
+   a future `.slot`/`.board`/`.seg` rule elsewhere cannot bleed in.
+   ============================================================================= */
+
+/* Compact controls: override the site-wide `input, select` margin/padding so the
+   builder's dense grid reads like the mockup rather than the page's spacious
+   forms. */
+#slotBuilder select,
+#slotBuilder input[type=text] {
+    height: 34px;
+    margin: 0;
+    padding: 0 0.6rem;
+    width: 100%;
+    font-size: 0.875rem;
+}
+
+/* Reuse the site's `.file-button`, but drop its large top margin so it sits
+   inline in a slot's Source-file row. */
+#slotBuilder .file-button {
+    margin: 0;
+    padding: 0.4rem 0.7rem;
+}
+
+#slotBuilder .gold-button {
+    margin-bottom: 0;
+}
+
+#slotBuilder .sb-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+#slotBuilder .sb-device-grid {
+    display: grid;
+    grid-template-columns: max-content auto;
+    gap: 0.6rem 0.9rem;
+    align-items: center;
+}
+#slotBuilder .sb-device-grid label {
+    color: var(--text-secondary);
+    text-align: right;
+    font-size: 0.9rem;
+}
+/* Keep each control at its original width once the column is content-sized (the
+   PCB row adds a Detect button, so the column can no longer be a fixed 200px). */
+#slotBuilder .sb-device-grid > select { width: 200px; justify-self: start; }
+#slotBuilder .sb-pcb-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+#slotBuilder .sb-pcb-row select { width: 200px; }
+#slotBuilder .sb-detect-btn {
+    min-width: 0;
+    margin: 0;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* A short informational line under a section (empty version list, plugin rule). */
+#slotBuilder .sb-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
+#slotBuilder .sb-note.sb-error {
+    color: var(--danger);
+}
+
+/* Help: an expandable section header styled to match the h3 section headers
+   (same colour, size, weight) - the only visible difference is the expand
+   triangle. Overrides the global `h2, summary` sizing. */
+#slotBuilder .sb-help {
+    margin-bottom: 1rem;
+}
+#slotBuilder .sb-help > summary {
+    cursor: pointer;
+    color: var(--text-color);
+    font-size: 1.25rem;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    user-select: none;
+    margin: 0;
+}
+#slotBuilder .sb-help > summary::-webkit-details-marker { display: none; }
+#slotBuilder .sb-help > summary::before {
+    content: "\25B8";
+    font-size: 0.8em;
+    transition: transform 0.15s ease;
+    display: inline-block;
+}
+#slotBuilder .sb-help[open] > summary::before { transform: rotate(90deg); }
+
+/* Jumper legend: board wireframe + copy */
+#slotBuilder .sb-jlegend {
+    margin-top: 0.6rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+}
+
+/* Board wireframe: top-down One ROM (component side up) */
+#slotBuilder .sb-board {
+    position: relative;
+    width: 124px;
+    height: 210px;
+    flex: none;
+    border: 1.5px solid var(--wire);
+    border-radius: 9px;
+    background: var(--bg-color);
+    padding: 21px 8px 0;
+    overflow: hidden;
+}
+#slotBuilder .sb-board .sb-pin1 {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 18px;
+    height: 18px;
+    background: var(--wire);
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+#slotBuilder .sb-board .sb-brand {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    text-align: center;
+    font-family: 'Michroma', sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    color: var(--wire);
+    white-space: nowrap;
+}
+/* Michroma set explicitly: the global `* { font-family: Inter }` rule lands
+   directly on the span, overriding the Michroma inherited from .sb-brand. */
+#slotBuilder .sb-board .sb-brand .o { color: var(--one-rom-gold); font-family: 'Michroma', sans-serif; }
+/* Board short code (e.g. "24F") below the brand. Michroma set explicitly (the
+   global `* { font-family }` rule would otherwise override the inherited face). */
+#slotBuilder .sb-board .sb-brand .sb-variant {
+    display: block;
+    font-family: 'Michroma', sans-serif;
+    /* Same size as "One ROM" - inherit the brand's font-size. */
+    letter-spacing: 0.01em;
+    color: var(--wire);
+    margin-top: 2px;
+}
+#slotBuilder .sb-board .sb-usb {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 34px;
+    border: 1.5px solid var(--wire);
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    color: var(--wire);
+    font-family: var(--mono);
+}
+
+#slotBuilder .sb-jblock {
+    display: flex;
+    gap: 3px;
+    align-items: flex-start;
+    justify-content: center;
+}
+#slotBuilder .sb-jcell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 18px;
+}
+#slotBuilder .sb-jcell .sb-pin {
+    width: 16px;
+    height: 32px;   /* 2:1 - two square pins stacked (centre line splits them) */
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: transparent;
+}
+#slotBuilder .sb-jcell .sb-lbl {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    font-family: var(--mono);
+    text-align: center;
+    line-height: 1.15;
+}
+#slotBuilder .sb-jcell.sb-active .sb-pin { border-color: var(--one-rom-gold); }
+#slotBuilder .sb-jcell.sb-active .sb-lbl { color: var(--one-rom-gold); }
+#slotBuilder .sb-jcell.sb-power .sb-pin,
+#slotBuilder .sb-jhint .sb-pin.sb-power { border-color: var(--power); color: var(--power); }
+/* Unavailable image-select positions: neutral border, marked with a grey cross. */
+#slotBuilder .sb-jcell .sb-pin.sb-unavail,
+#slotBuilder .sb-jhint .sb-pin.sb-unavail { border-color: var(--border-color); color: var(--border-color); }
+/* Absent column: hold the layout space, draw nothing. */
+#slotBuilder .sb-jcell .sb-pin.sb-blank,
+#slotBuilder .sb-jhint .sb-pin.sb-blank { border-color: transparent; }
+#slotBuilder .sb-jcell .sb-pin,
+#slotBuilder .sb-jhint .sb-pin { position: relative; overflow: hidden; }
+#slotBuilder .sb-jcell .sb-pin svg,
+#slotBuilder .sb-jhint .sb-pin svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* Cross stroke is set explicitly per pin kind: the global `* { color }` rule
+   lands directly on the <line> elements, so `currentColor` would resolve to the
+   text colour (grey) rather than the pin's border colour. Grey default for the
+   unavailable cross, red for the power cross - matching each pin's border. */
+#slotBuilder .sb-jcell .sb-pin line,
+#slotBuilder .sb-jhint .sb-pin line { stroke: var(--border-color); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+#slotBuilder .sb-jcell.sb-power .sb-pin line,
+#slotBuilder .sb-jhint .sb-pin.sb-power line { stroke: var(--power); }
+#slotBuilder .sb-jcell.sb-power .sb-lbl { color: var(--power); font-size: 0.58rem; }
+/* An image-select position is a 2-pin header: a centre line splits the rectangle
+   into two pins. Only on open select pins (a closed jumper is drawn solid, so the
+   line would not show); never on power or unused positions. Line colour matches
+   the pin's outline. */
+#slotBuilder .sb-pin.sb-sel::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    transform: translateY(-50%);
+}
+#slotBuilder .sb-jcell.sb-active .sb-pin.sb-sel::after { background: var(--one-rom-gold); }
+#slotBuilder .sb-jhint .sb-pin.sb-sel::after { background: var(--border-color); }
+#slotBuilder .sb-jlegend .sb-legend-note {
+    flex: 1;
+    min-width: 220px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+#slotBuilder .sb-jlegend .sb-legend-note p { margin: 0 0 0.4rem; }
+#slotBuilder .sb-jlegend .sb-legend-note p:last-child { margin-bottom: 0; }
+#slotBuilder .sb-jlegend .sb-legend-note b { color: var(--text-color); }
+#slotBuilder .sb-jlegend .sb-caveat {
+    flex-basis: 100%;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    opacity: 0.85;
+}
+/* No board chosen yet: muted prompts in place of the wireframe / per-slot pins. */
+#slotBuilder .sb-legend-empty {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+#slotBuilder .sb-jhint.sb-jhint-empty {
+    font-style: italic;
+    opacity: 0.85;
+}
+
+/* Capacity (flash-usage) bar */
+#slotBuilder .sb-cap-wrap { margin-top: 0.9rem; }
+#slotBuilder .sb-cap-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+}
+#slotBuilder .sb-cap-head .sb-figs {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+#slotBuilder .sb-cap-wrap.sb-over .sb-figs { color: var(--danger); }
+#slotBuilder .sb-cap-bar {
+    display: flex;
+    height: 16px;
+    background: var(--input-bg-color);
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+#slotBuilder .sb-seg {
+    height: 100%;
+    min-width: 3px;
+    transition: width 0.3s ease;
+    box-shadow: inset -1px 0 0 rgba(0,0,0,0.3);
+}
+#slotBuilder .sb-seg.sb-fw { background: var(--cyan); }
+#slotBuilder .sb-seg.sb-plugin { background: var(--bronze); }
+#slotBuilder .sb-seg.sb-seg-rom { background: var(--one-rom-gold); }
+#slotBuilder .sb-seg.sb-over { background: var(--danger); }
+#slotBuilder .sb-cap-legend {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+#slotBuilder .sb-cap-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+#slotBuilder .sb-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* Slot cards */
+#slotBuilder .sb-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    margin-top: 0.9rem;
+}
+#slotBuilder .sb-slot {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    padding: 0.65rem 0.9rem 0.75rem;
+}
+#slotBuilder .sb-slot.sb-dragging { opacity: 0.4; }
+#slotBuilder .sb-slot.sb-drop-target { border-color: var(--one-rom-gold); box-shadow: 0 0 0 1px var(--one-rom-gold); }
+#slotBuilder .sb-slot-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+}
+#slotBuilder .sb-handle {
+    cursor: grab;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    line-height: 1;
+    user-select: none;
+    padding: 0 0.15rem;
+}
+#slotBuilder .sb-handle:active { cursor: grabbing; }
+#slotBuilder .sb-slot-title {
+    font-weight: 600;
+    font-size: 1.05rem;
+    white-space: nowrap;
+    color: var(--one-rom-gold);
+}
+#slotBuilder .sb-slot-title .sb-idx { color: var(--one-rom-gold); }
+
+#slotBuilder .sb-jhint {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+#slotBuilder .sb-jhint .sb-pins { display: flex; gap: 3px; }
+#slotBuilder .sb-jhint .sb-pin {
+    width: 11px;
+    height: 22px;   /* 2:1 - two square pins stacked (centre line splits them) */
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    background: transparent;
+}
+#slotBuilder .sb-jhint .sb-pin.sb-closed { background: var(--one-rom-gold); border-color: var(--one-rom-gold); }
+
+#slotBuilder .sb-slot-head .sb-spacer { flex: 1; }
+#slotBuilder .sb-icon-btn {
+    background: var(--button-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    color: var(--text-color);
+    /* Reset the global button min-width (7rem) + margin, else these inflate to
+       wide pills instead of staying square. */
+    min-width: 0;
+    margin: 0;
+    width: 30px;
+    height: 30px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+#slotBuilder .sb-icon-btn:hover:not(:disabled) { background: var(--button-hover-color); }
+#slotBuilder .sb-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+#slotBuilder .sb-icon-btn.sb-remove:hover:not(:disabled) { background: var(--danger-dim); border-color: var(--danger); }
+
+#slotBuilder .sb-slot-body { display: flex; flex-direction: column; gap: 0.35rem; }
+#slotBuilder .sb-group-title {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+    margin: 0.25rem 0 0;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+#slotBuilder .sb-field-grid {
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 0.35rem 0.8rem;
+    align-items: center;
+}
+#slotBuilder .sb-field-grid > label {
+    color: var(--text-secondary);
+    text-align: right;
+    font-size: 0.9rem;
+}
+#slotBuilder .sb-inline-lbl {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+}
+#slotBuilder .sb-cs-unit { display: inline-flex; align-items: center; gap: 0.3rem; }
+#slotBuilder .sb-cs-tag { color: var(--text-secondary); font-size: 0.8rem; }
+#slotBuilder .sb-rtype-select,
+#slotBuilder .sb-fmt-select,
+#slotBuilder .sb-sh-select { max-width: 140px; }
+#slotBuilder .sb-cs-select { width: 140px; }
+#slotBuilder .sb-row-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    flex-wrap: wrap;
+}
+/* Chip-selects label sits at the top line when the dropdowns wrap. */
+#slotBuilder .sb-field-grid > .sb-cs-label { align-self: start; padding-top: 7px; }
+#slotBuilder .sb-field-grid > .sb-cs-row { align-self: start; }
+#slotBuilder .sb-rom-size { color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap; }
+#slotBuilder .sb-filename { color: var(--text-secondary); font-size: 0.85rem; }
+#slotBuilder .sb-filename.sb-set { color: var(--one-rom-gold); }
+#slotBuilder .sb-addr-input { max-width: 140px; }
+/* Label input fills its row but yields room for the trailing tooltip. */
+#slotBuilder .sb-label-input { flex: 1; min-width: 0; }
+
+#slotBuilder .sb-add-row {
+    margin-top: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+}
+#slotBuilder .sb-hint-inline { font-size: 0.8rem; color: var(--text-secondary); }
+#slotBuilder .sb-hint-inline.sb-cap { color: var(--danger); }
+
+#slotBuilder .sb-plugins-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(220px, 1fr);
+    gap: 0.6rem 0.9rem;
+    align-items: center;
+    max-width: 480px;
+}
+#slotBuilder .sb-plugins-grid label {
+    color: var(--text-secondary);
+    text-align: right;
+    font-size: 0.9rem;
+}
+
+#slotBuilder .sb-build-row {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+#slotBuilder .sb-prog-note { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; }
+#slotBuilder .sb-warn { color: var(--danger); font-size: 0.85rem; margin-top: 0.5rem; }
