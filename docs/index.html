@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>One ROM Documentation - PDF Editions</title>
+    <meta name="description" content="One ROM documentation as PDFs, in A4 and US Letter - the CLI manual, chip compatibility and chip type references.">
+    <link rel="canonical" href="https://onerom.org/docs/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/docs/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One ROM Documentation">
+    <meta property="og:description" content="One ROM documentation as PDFs, in A4 and US Letter.">
+    <meta property="og:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://onerom.org/docs/">
+    <meta name="twitter:title" content="One ROM Documentation">
+    <meta name="twitter:description" content="One ROM documentation as PDFs, in A4 and US Letter.">
+    <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <script src="/js/docs/docs.js" data-doc="all" defer></script>
+</head>
+
+<body>
+    <div class="app">
+
+        <!-- Title -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
+            <h1 style="margin-bottom: 0; border-bottom: none;">One R<span class="o-in-rom">O</span>M Documentation</h1>
+            <div style="display: flex; gap: 1rem;">
+                <a href="/cli/" class="gold-button"><span class="michroma">CLI</span></a>
+                <a href="/" class="gold-button"><span class="michroma">Home</span></a>
+            </div>
+        </div>
+
+        <details open>
+            <summary id="downloads">Downloads</summary>
+
+            <div id="docs-table">
+                <p>Loading documentation information...</p>
+            </div>
+
+            <p>
+                sha256 checksums are provided for every download.
+            </p>
+        </details>
+
+        <details>
+            <summary id="source">Source</summary>
+            <p>
+                These PDFs are built from the markdown in the One ROM repository,
+                which is the always-current version - a PDF is a snapshot of one
+                release.  The originals are on GitHub:
+            </p>
+
+            <div id="docs-sources"></div>
+            <p>
+                The documentation is licensed under the MIT license, like One ROM's
+                software and firmware.
+            </p>
+        </details>
+
+        <div id="footer"></div>
+        <script src="/js/site/footer.js"></script>
+
+    </div>
+</body>
+
+<script data-goatcounter="https://onerom-site.analytics.piers.rocks/count" async src="//onerom-site.analytics.piers.rocks/count.js"></script>
+
+</html>
