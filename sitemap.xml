@@ -8,9 +8,36 @@
     </image:image>
   </url>
   <url>
-    <loc>https://onerom.org/usb/</loc>
+    <loc>https://onerom.org/buy/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/cli/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/config/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/docs/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/prog/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/start/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/studio/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/visualizer/</loc>
+  </url>
+  <url>
+    <loc>https://onerom.org/web/</loc>
     <image:image>
-      <image:loc>https://onerom.org/usb/images/one-rom-ice-usb.png</image:loc>
+      <image:loc>https://onerom.org/web/images/one-rom-ice-usb.png</image:loc>
     </image:image>
+  </url>
+  <url>
+    <loc>https://onerom.org/wild/</loc>
   </url>
 </urlset>
