@@ -75,12 +75,17 @@
 
     const repoBase = 'https://github.com/piersfinlayson/one-rom/blob/main';
 
+    // A PDF may be assembled from several documents, so `sources` is a list in
+    // every case and each entry gets its own link.
     function renderSourceRow(catalogue) {
-        if (!catalogue.source_path) return '';
+        const sources = catalogue.sources;
+        if (!Array.isArray(sources) || sources.length === 0) return '';
+        const links = sources.map(path =>
+            `<a href="${repoBase}/${path}" target="_blank"><code>${escapeHtml(path)}</code></a>`
+        ).join(', ');
         return `
             <li>
-                <a href="${repoBase}/${catalogue.source_path}" target="_blank">${escapeHtml(catalogue.display_name)}</a>
-                &mdash; <code>${escapeHtml(catalogue.source_path)}</code>
+                ${escapeHtml(catalogue.display_name)} &mdash; ${links}
             </li>`;
     }
 
