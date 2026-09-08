@@ -369,6 +369,12 @@ code {
     line-height: normal;
 }
 
+/* A radio group stacks its options, so a centred row leaves the label and its
+   help icon beside the middle one.  Line them up with the first option. */
+.select-row:has(.radio-group) {
+    align-items: flex-start;
+}
+
 .select-row select {
     flex: 1;
     margin: 0;

@@ -150,7 +150,7 @@
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.0/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.1/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -1198,7 +1198,7 @@ function readFileFormat(radioName) {
 // valid (means 0). Accepts decimal, 0x-hex or $-hex, matching onerom-gen's
 // LoadAddress::parse_str exactly so the web and the CLI accept the same set of
 // values. Pure: the caller decides whether Intel HEX is even selected.
-function ihexLoadAddressError(raw) {
+function loadAddressError(raw) {
     const trimmed = raw.trim();
     if (trimmed === '') return null;
     const valid = /^\$[0-9a-fA-F]+$/.test(trimmed)      // $E000
@@ -1225,7 +1225,7 @@ function buildRomConfig(wasm, { fileName, chipType, sizeHandling, fileFormat, lo
     if (fileFormat !== 'binary') {
         romConfig.format = fileFormat;
     }
-    if (fileFormat === 'ihex' && loadAddress) {
+    if (fileFormat !== 'binary' && loadAddress) {
         romConfig.load_address = loadAddress;
     }
 
@@ -1690,10 +1690,11 @@ const CustomImageManager = {
         // Auto-select the file format from the extension, user-overridable. The
         // format is explicit (not sniffed from the bytes) - this only sets the
         // default selection, which the user can change before building.
-        const wanted = /\.(hex|ihex|ihx|mcs)$/i.test(file.name) ? 'ihex' : 'binary';
+        const wanted = /\.(hex|ihex|ihx|mcs)$/i.test(file.name) ? 'ihex'
+            : /\.(s19|s28|s37|srec|mot)$/i.test(file.name) ? 'srec' : 'binary';
         const radio = document.querySelector(`input[name="customFileFormat"][value="${wanted}"]`);
         if (radio) radio.checked = true;
-        this.updateIhexUi();
+        this.updateLoadAddressUi();
 
         // Clear the input now the bytes are safely in hand. A file input only
         // fires change when its value differs, and its value is the path - so
@@ -1722,7 +1723,7 @@ const CustomImageManager = {
             document.getElementById('customFormatGroup'),
             'customFileFormat',
             () => {
-                this.updateIhexUi();
+                this.updateLoadAddressUi();
                 this.updateBuildButton();
             });
     },
@@ -1733,20 +1734,20 @@ const CustomImageManager = {
         return readFileFormat('customFileFormat');
     },
 
-    // Show the load-address row only when Intel HEX is selected. It is not
-    // meaningful for a raw binary, and irrelevant even for most Intel HEX files
-    // (only those whose data sits at a non-zero base address need it).
-    updateIhexUi() {
-        const isIhex = this.selectedFileFormat() === 'ihex';
-        document.getElementById('customLoadAddressRow').classList.toggle('hidden', !isIhex);
+    // Show the load-address row only for a record format. It is not meaningful
+    // for a raw binary, and irrelevant even for most record files - only those
+    // whose data sits at a non-zero base address need it.
+    updateLoadAddressUi() {
+        const isRecord = this.selectedFileFormat() !== 'binary';
+        document.getElementById('customLoadAddressRow').classList.toggle('hidden', !isRecord);
     },
 
-    // A clear message if the Intel HEX inputs are invalid, else null. Only
-    // meaningful when Intel HEX is selected; the load-address check itself lives
-    // in the shared ihexLoadAddressError helper.
-    ihexValidationMessage() {
-        if (this.selectedFileFormat() !== 'ihex') return null;
-        return ihexLoadAddressError(document.getElementById('customLoadAddress').value);
+    // A clear message if the load address is invalid, else null. Only meaningful
+    // for a record format - the check itself lives in the shared
+    // loadAddressError helper.
+    loadAddressValidationMessage() {
+        if (this.selectedFileFormat() === 'binary') return null;
+        return loadAddressError(document.getElementById('customLoadAddress').value);
     },
 
     updateRomTypes() {
@@ -1938,9 +1939,9 @@ const CustomImageManager = {
 
         // Validate the Intel HEX load address up front, so a malformed value
         // gives a clear message here rather than a raw decode error from gen.
-        const ihexErr = this.ihexValidationMessage();
-        if (ihexErr) {
-            alert(ihexErr);
+        const addrErr = this.loadAddressValidationMessage();
+        if (addrErr) {
+            alert(addrErr);
             return;
         }
 
@@ -2862,7 +2863,7 @@ const SlotBuilderManager = {
                 </select><span class="sb-cs-tag">CS${c + 1}</span></span>`);
         }
 
-        const isIhex = s.fileFormat === 'ihex';
+        const isRecord = s.fileFormat !== 'binary';
         el.innerHTML = `
             <div class="sb-slot-head">
                 <span class="sb-handle" title="Drag to reorder">&#10303;</span>
@@ -2880,17 +2881,17 @@ const SlotBuilderManager = {
                     <label>Image:</label>
                     <div class="sb-row-inline">
                         <span class="file-button sb-pick">Upload Image</span>
-                        <input type="file" class="sb-file-input" accept=".bin,.rom,.hex,.ihex,.ihx,.mcs" style="display:none">
+                        <input type="file" class="sb-file-input" accept=".bin,.rom,.hex,.ihex,.ihx,.mcs,.s19,.s28,.s37,.srec,.mot" style="display:none">
                         <span class="sb-filename ${s.filename ? 'sb-set' : ''}">${s.filename ? sbAttr(s.filename) : 'No file selected'}</span>
                     </div>
                     <label>Format:</label>
                     <div class="sb-row-inline">
                         <select class="sb-fmt sb-fmt-select">${fmtOpts}</select>
-                        <span class="help-text" title="How the uploaded file is interpreted. Binary: a raw ROM image, byte-for-byte. Intel HEX: a .hex/.ihex text file, decoded before use. Auto-selected from the file extension; change to override.">&#9432;</span>
-                        <span class="sb-addr-row" style="${isIhex ? 'display:inline-flex;align-items:center;gap:0.5rem;' : 'display:none'}">
+                        <span class="help-text" title="How the uploaded file is interpreted. Binary: a raw ROM image, byte-for-byte. Intel HEX and S-record: text files holding address-tagged records, decoded before use. Auto-selected from the file extension - change to override.">&#9432;</span>
+                        <span class="sb-addr-row" style="${isRecord ? 'display:inline-flex;align-items:center;gap:0.5rem;' : 'display:none'}">
                             <span class="sb-inline-lbl">Load address:</span>
                             <input type="text" class="sb-addr-input" placeholder="0x0000" value="${sbAttr(s.loadAddr)}">
-                            <span class="help-text" title="Only needed if the Intel HEX file holds its data at a non-zero base address. Set this to that base (e.g. 0xE000); it is subtracted so that becomes byte 0. Blank means 0. Accepts 57344, 0xE000, or $E000.">&#9432;</span>
+                            <span class="help-text" title="Only needed if the Intel HEX or S-record file holds its data at a non-zero base address. Set this to that base (e.g. 0xE000) - it is subtracted so that becomes byte 0. Blank means 0. Accepts 57344, 0xE000, or $E000.">&#9432;</span>
                         </span>
                     </div>
                 </div>
@@ -2968,7 +2969,8 @@ const SlotBuilderManager = {
         s.fileGen = ++this.fileGeneration;
 
         // Auto-select the file format from the extension (user-overridable).
-        s.fileFormat = /\.(hex|ihex|ihx|mcs)$/i.test(file.name) ? 'ihex' : 'binary';
+        s.fileFormat = /\.(hex|ihex|ihx|mcs)$/i.test(file.name) ? 'ihex'
+            : /\.(s19|s28|s37|srec|mot)$/i.test(file.name) ? 'srec' : 'binary';
 
         // Clear the input so re-selecting the same path fires change again (see
         // the same trick in CustomImageManager.onRomFileChange).
@@ -3116,12 +3118,12 @@ const SlotBuilderManager = {
     async buildFirmware() {
         const buildBtn = document.getElementById('slotBuildBtn');
 
-        // Validate every Intel HEX load address up front, so a malformed value
-        // gives a clear message here rather than a raw decode error from gen.
+        // Validate every record file's load address up front, so a malformed
+        // value gives a clear message here rather than a raw decode error from gen.
         for (let i = 0; i < this.slots.length; i++) {
             const s = this.slots[i];
-            if (s.fileFormat === 'ihex') {
-                const err = ihexLoadAddressError(s.loadAddr);
+            if (s.fileFormat !== 'binary') {
+                const err = loadAddressError(s.loadAddr);
                 if (err) { alert(`Slot ${i}: ${err}`); return; }
             }
         }
