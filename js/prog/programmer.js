@@ -140,12 +140,12 @@
 //    Stop and Run used to put up a device picker every single time.
 //
 //    Reconnecting therefore goes through rebootAndReconnect(), which waits for
-//    the device to reappear under a DIFFERENT PID - both because the mode must
-//    change, and to avoid latching onto the outgoing device in the window before
-//    the host notices it detach. It reconnects silently provided the target
-//    mode's PID has been authorised before, which matters because after a flash
-//    there is no user activation left and a picker may not be permitted to
-//    appear at all.
+//    a device that was NOT in getDevices() before the reboot and whose PID
+//    differs. That excludes the outgoing device, a second One ROM, and the
+//    ghosts Chrome on Linux keeps when it misses a udev remove. It reconnects
+//    silently provided the target mode's PID has been authorised before, which
+//    matters because after a flash there is no user activation left and a
+//    picker may not be permitted to appear at all.
 // =============================================================================
 
 import { compareChips } from '/js/site/utils.js'

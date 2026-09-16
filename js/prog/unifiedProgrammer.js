@@ -340,9 +340,12 @@ class UnifiedProgrammer {
     async rebootAndReconnect(stopped) {
         const previousPid = this.cachedUsbDevice ? this.cachedUsbDevice.productId : null;
 
+        // Taken before the reboot so the wait can demand a newcomer.
+        const before = new Set(await navigator.usb.getDevices());
+
         await this.reboot(stopped);
 
-        const device = await this._waitForReenumeration(previousPid);
+        const device = await this._waitForReenumeration(before, previousPid);
         if (!device) {
             return false;
         }
@@ -353,24 +356,27 @@ class UnifiedProgrammer {
     }
 
     /**
-     * Wait for a One ROM to appear on the bus under a PID other than the one
-     * given.
+     * Wait for a One ROM that was not in getDevices() before the reboot.
      *
-     * The PID encodes the mode, so a reboot must change it. Requiring a change
-     * also avoids latching onto the outgoing device in the moment between the
-     * reboot command being accepted and the host noticing the detach.
+     * Anything already listed is not the device we want: the outgoing device,
+     * a second One ROM, or a ghost. Chrome on Linux sometimes misses a udev
+     * remove and then lists a device it can never open again until it restarts.
+     * Chrome returns the same USBDevice object for a device on every call, so
+     * the snapshot is compared by identity. The PID check stays as a fallback,
+     * since a reboot always changes the PID.
      *
      * @private
+     * @param {Set<USBDevice>} before - getDevices() as it stood before the reboot
      * @param {number|null} previousPid - PID before the reboot, if known
      * @returns {Promise<USBDevice|null>} the device, or null on timeout
      */
-    async _waitForReenumeration(previousPid) {
+    async _waitForReenumeration(before, previousPid) {
         const deadline = Date.now() + REBOOT_REENUMERATE_TIMEOUT_MS;
 
         for (;;) {
             const devices = await navigator.usb.getDevices();
             const device = devices.find(d =>
-                isOneRomDevice(d) && d.productId !== previousPid);
+                isOneRomDevice(d) && !before.has(d) && d.productId !== previousPid);
             if (device) {
                 return device;
             }
