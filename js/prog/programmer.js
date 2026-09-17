@@ -150,7 +150,7 @@
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.1/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.2/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
