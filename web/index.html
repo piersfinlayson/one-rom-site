@@ -344,6 +344,17 @@
                                     </select>
                                 </div>
 
+                                <!-- Shown for a 16-bit ROM type only. See CustomImageManager.applyByteOrder(). -->
+                                <div class="select-row hidden" id="customSwapBytesRow">
+                                    <label>Byte Order:</label>
+                                    <label class="radio-option">
+                                        <input type="checkbox" id="customSwapBytes">
+                                        <span>Swap bytes</span>
+                                    </label>
+                                    <span class="help-text" title="Swaps each pair of bytes in the image. Required for a 16-bit image stored high byte first as 68000 ROM images such as Amiga Kickstart usually are. Set automatically when the image's first bytes identify its byte order.">ⓘ</span>
+                                </div>
+                                <div class="byte-order-note hidden" id="customByteOrderNote"></div>
+
                                 <div class="select-row">
                                     <label>Size Handling:</label>
                                     <div class="radio-group">

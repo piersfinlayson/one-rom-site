@@ -150,7 +150,7 @@
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.2/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.3/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -1210,12 +1210,51 @@ function loadAddressError(raw) {
           `or leave it blank for 0.`;
 }
 
+// Whether chipType has a 16-bit mode and so offers Swap bytes. The CLI uses
+// the same test before checking a slot's byte order.
+function is16BitChip(wasm, chipType) {
+    return !!chipType && wasm.chip_type_info(chipType).bit_modes.includes(16);
+}
+
+// The image's byte order from wasm.byte_order() or undefined where it isn't
+// recognised. Only a raw binary is checked - an Intel HEX or S-record file is
+// text until gen decodes it at build time.
+function detectByteOrder(wasm, bytes, fileFormat) {
+    if (!bytes || fileFormat !== 'binary') return undefined;
+    return wasm.byte_order(bytes);
+}
+
+// The line shown under Swap bytes as { text, warning } or null for none.
+// Nothing is shown where the byte order isn't recognised or where an image
+// already low byte first is left unswapped.
+function byteOrderNote(order, swapBytes) {
+    if (!order) return null;
+    const found = `Found ${order.evidence}`;
+    if (order.needs_swap_bytes && swapBytes) {
+        return { text: `${found} stored high byte first. Swap bytes ticked.`, warning: false };
+    }
+    if (order.needs_swap_bytes) {
+        return {
+            text: `${found} stored high byte first. Recommend ticking Swap bytes.`,
+            warning: true
+        };
+    }
+    if (swapBytes) {
+        return {
+            text: `${found} already stored low byte first. Recommend unticking Swap bytes.`,
+            warning: true
+        };
+    }
+    return null;
+}
+
 // The per-image config fragment: one ROM's { file, type, size_handling, ... }
 // object. Non-binary formats add `format`; Intel HEX adds `load_address` only
-// when a non-zero base is given (blank means 0). CS lines are emitted in the
-// order the chip type's configurable control lines appear, reading the matching
-// entry from csSelectValues (index 0 = the first configurable line).
-function buildRomConfig(wasm, { fileName, chipType, sizeHandling, fileFormat, loadAddress, csSelectValues }) {
+// when a non-zero base is given (blank means 0). Swap bytes adds the
+// `swap_bytes` transform for a 16-bit chip type only. CS lines are emitted in
+// the order the chip type's configurable control lines appear, reading the
+// matching entry from csSelectValues (index 0 = the first configurable line).
+function buildRomConfig(wasm, { fileName, chipType, sizeHandling, fileFormat, loadAddress, swapBytes, csSelectValues }) {
     const romConfig = {
         file: fileName,
         type: chipType,
@@ -1227,6 +1266,9 @@ function buildRomConfig(wasm, { fileName, chipType, sizeHandling, fileFormat, lo
     }
     if (fileFormat !== 'binary' && loadAddress) {
         romConfig.load_address = loadAddress;
+    }
+    if (swapBytes && is16BitChip(wasm, chipType)) {
+        romConfig.transform = ['swap_bytes'];
     }
 
     let csIndex = 1;
@@ -1414,6 +1456,11 @@ const CustomImageManager = {
     // cost more than it is worth. The generation is exact and free - a fresh
     // selection is a new generation, whatever the bytes turn out to be.
     chipFileGeneration: 0,
+
+    // The image's byte order from detectByteOrder() and the key
+    // applyByteOrder() last set it for.
+    chipByteOrder: undefined,
+    byteOrderKey: null,
     builtFirmware: null,
 
     // The configSignature() at the moment builtFirmware was produced. Any
@@ -1547,8 +1594,15 @@ const CustomImageManager = {
             if (e.target.value) {
                 this.onRomTypeChange(e.target.value);
             } else {
+                this.applyByteOrder();
                 this.updateBuildButton();
             }
+        });
+
+        // Swap bytes is a build input and changes the byte order note.
+        document.getElementById('customSwapBytes').addEventListener('change', () => {
+            this.updateByteOrderNote();
+            this.updateBuildButton();
         });
 
         // Size handling selection
@@ -1590,6 +1644,7 @@ const CustomImageManager = {
         this.resetSelect('customVersionSelect');
         this.resetSelect('customRomTypeSelect');
         this.hideCs();
+        this.applyByteOrder();
 
         // Plugins are Fire-only. Show/hide synchronously and load the catalogue
         // in the background, so plugin loading never blocks or breaks the
@@ -1629,6 +1684,7 @@ const CustomImageManager = {
             this.resetSelect('customVersionSelect');
         }
         this.updateRomTypes();
+        this.applyByteOrder();
         this.updateBuildButton();
     },
     
@@ -1679,6 +1735,7 @@ const CustomImageManager = {
             fileNameSpan.textContent = 'No file selected';
             fileNameSpan.classList.remove('selected');
             this.resetSelect('customRomTypeSelect');
+            this.applyByteOrder();
             this.updateBuildButton();
             return;
         }
@@ -1711,7 +1768,8 @@ const CustomImageManager = {
         if (this.selectedBoard) {
             this.updateRomTypes();
         }
-        
+
+        this.applyByteOrder();
         this.updateBuildButton();
     },
     
@@ -1724,6 +1782,7 @@ const CustomImageManager = {
             'customFileFormat',
             () => {
                 this.updateLoadAddressUi();
+                this.applyByteOrder();
                 this.updateBuildButton();
             });
     },
@@ -1748,6 +1807,36 @@ const CustomImageManager = {
     loadAddressValidationMessage() {
         if (this.selectedFileFormat() === 'binary') return null;
         return loadAddressError(document.getElementById('customLoadAddress').value);
+    },
+
+    // Show Swap bytes for a 16-bit ROM type and set it from the image's byte
+    // order where that is recognised. The box is set only when the file, its
+    // format or whether the type is 16-bit has changed since it was last set.
+    // This is safe to call from any change and a click on the box stays.
+    applyByteOrder() {
+        const chipType = document.getElementById('customRomTypeSelect').value;
+        const is16 = is16BitChip(this.wasm, chipType);
+        document.getElementById('customSwapBytesRow').classList.toggle('hidden', !is16);
+
+        const format = this.selectedFileFormat();
+        const key = `${this.chipFileGeneration}:${format}:${is16}`;
+        if (key !== this.byteOrderKey) {
+            this.byteOrderKey = key;
+            this.chipByteOrder = is16 ? detectByteOrder(this.wasm, this.chipFile, format) : undefined;
+            if (this.chipByteOrder) {
+                document.getElementById('customSwapBytes').checked = this.chipByteOrder.needs_swap_bytes;
+            }
+        }
+        this.updateByteOrderNote();
+    },
+
+    updateByteOrderNote() {
+        const note = byteOrderNote(
+            this.chipByteOrder, document.getElementById('customSwapBytes').checked);
+        const el = document.getElementById('customByteOrderNote');
+        el.textContent = note ? note.text : '';
+        el.classList.toggle('hidden', !note);
+        el.classList.toggle('warning', !!note && note.warning);
     },
 
     updateRomTypes() {
@@ -1794,7 +1883,8 @@ const CustomImageManager = {
                 }
             }
         });
-        
+
+        this.applyByteOrder();
         this.updateBuildButton();
     },
     
@@ -1843,6 +1933,7 @@ const CustomImageManager = {
             // either must invalidate a built image.
             fileFormat: this.selectedFileFormat(),
             loadAddress: value('customLoadAddress').trim(),
+            swapBytes: document.getElementById('customSwapBytes').checked,
             cs: ['customCs1Select', 'customCs2Select', 'customCs3Select'].map(value),
             systemPlugin: this.selectedSystemPlugin ? this.selectedSystemPlugin.url : '',
             userPlugin: this.selectedUserPlugin ? this.selectedUserPlugin.url : '',
@@ -2058,6 +2149,7 @@ const CustomImageManager = {
             sizeHandling: document.querySelector('input[name="customSizeHandling"]:checked').value,
             fileFormat: this.selectedFileFormat(),
             loadAddress: document.getElementById('customLoadAddress').value.trim(),
+            swapBytes: document.getElementById('customSwapBytes').checked,
             csSelectValues: ['customCs1Select', 'customCs2Select', 'customCs3Select']
                 .map(id => document.getElementById(id).value)
         });
@@ -2599,7 +2691,9 @@ const SlotBuilderManager = {
     },
 
     // A fresh slot. Add-slot inherits the previous slot's ROM type + CS (and
-    // format/size handling), never its file or label.
+    // format/size handling), never its file, label or Swap bytes. Swap bytes
+    // goes with the file. byteOrder and byteOrderKey are as applyByteOrder sets
+    // them.
     newSlot(prev) {
         return {
             id: ++this.uid,
@@ -2610,6 +2704,9 @@ const SlotBuilderManager = {
             sizeHandling: prev ? prev.sizeHandling : 'none',
             fileFormat: prev ? prev.fileFormat : 'binary',
             loadAddr: '',
+            swapBytes: false,
+            byteOrder: undefined,
+            byteOrderKey: null,
             csValues: prev ? [...prev.csValues] : ['active_low', 'active_low', 'active_low'],
             label: ''
         };
@@ -2706,7 +2803,10 @@ const SlotBuilderManager = {
 
         const host = document.getElementById('slotList');
         host.innerHTML = '';
-        this.slots.forEach((s, i) => host.appendChild(this.slotCard(s, i)));
+        this.slots.forEach((s, i) => {
+            this.applyByteOrder(s);
+            host.appendChild(this.slotCard(s, i));
+        });
 
         document.getElementById('slotCount').textContent =
             '(' + this.slots.length + (this.slots.length === 1 ? ' slot)' : ' slots)');
@@ -2842,6 +2942,8 @@ const SlotBuilderManager = {
             sizeBytes = info.size_bytes;
             csCount = info.control_lines.filter(l => l.cs_type === 'configurable').length;
         }
+        const is16 = is16BitChip(this.wasm, s.typeAlias);
+        const note = is16 ? byteOrderNote(s.byteOrder, s.swapBytes) : null;
 
         const typeOpts = ['<option value="">&mdash; select &mdash;</option>']
             .concat(this.romTypes.map(a =>
@@ -2901,6 +3003,13 @@ const SlotBuilderManager = {
                     <label>ROM Type:</label>
                     <div class="sb-row-inline"><select class="sb-rtype sb-rtype-select">${typeOpts}</select>${sizeBytes ? `<span class="sb-rom-size">Size: ${sbKb(sizeBytes)}</span>` : ''}</div>
 
+                    ${is16 ? `<label>Byte order:</label>
+                    <div class="sb-row-inline">
+                        <label class="sb-swap"><input type="checkbox" class="sb-swap-input" ${s.swapBytes ? 'checked' : ''}><span>Swap bytes</span></label>
+                        <span class="help-text" title="Swaps each pair of bytes in the image. Required for a 16-bit image stored high byte first as 68000 ROM images such as Amiga Kickstart usually are. Set automatically when the image's first bytes identify its byte order.">&#9432;</span>
+                    </div>` : ''}
+                    ${note ? `<span></span><div class="byte-order-note${note.warning ? ' warning' : ''}">${sbAttr(note.text)}</div>` : ''}
+
                     <label>Size handling:</label>
                     <div class="sb-row-inline">
                         <select class="sb-sh sb-sh-select">
@@ -2926,14 +3035,16 @@ const SlotBuilderManager = {
 
         // Wire events. Text inputs (description, load address) and the CS / size-
         // handling dropdowns update state WITHOUT a re-render, so typing keeps
-        // focus; only structural changes (type, file, format, add/remove/move)
-        // rebuild the card list.
+        // focus; only structural changes (type, file, format, Swap bytes,
+        // add/remove/move) rebuild the card list.
         el.querySelector('.sb-label-input').addEventListener('input', e => { s.label = e.target.value; this.onInputChanged(); });
         el.querySelector('.sb-rtype').addEventListener('change', e => { s.typeAlias = e.target.value; this.render(); });
         el.querySelector('.sb-pick').addEventListener('click', () => el.querySelector('.sb-file-input').click());
         el.querySelector('.sb-file-input').addEventListener('change', e => this.onFileChange(s, e));
         el.querySelector('.sb-fmt').addEventListener('change', e => { s.fileFormat = e.target.value; this.render(); });
         el.querySelector('.sb-sh').addEventListener('change', e => { s.sizeHandling = e.target.value; this.onInputChanged(); });
+        const swap = el.querySelector('.sb-swap-input');
+        if (swap) swap.addEventListener('change', e => { s.swapBytes = e.target.checked; this.render(); });
         const addr = el.querySelector('.sb-addr-input');
         if (addr) addr.addEventListener('input', e => { s.loadAddr = e.target.value; this.onInputChanged(); });
         el.querySelectorAll('.sb-cs-select').forEach(sel =>
@@ -2977,6 +3088,19 @@ const SlotBuilderManager = {
         e.target.value = '';
 
         this.render();
+    },
+
+    // Set a slot's Swap bytes from its image's byte order where that is
+    // recognised. As in CustomImageManager.applyByteOrder the box is set only
+    // when the file, its format or whether the type is 16-bit has changed. A
+    // click on the box stays.
+    applyByteOrder(s) {
+        const is16 = is16BitChip(this.wasm, s.typeAlias);
+        const key = `${s.fileGen}:${s.fileFormat}:${is16}`;
+        if (key === s.byteOrderKey) return;
+        s.byteOrderKey = key;
+        s.byteOrder = is16 ? detectByteOrder(this.wasm, s.fileBytes, s.fileFormat) : undefined;
+        if (s.byteOrder) s.swapBytes = s.byteOrder.needs_swap_bytes;
     },
 
     move(from, to) {
@@ -3100,6 +3224,7 @@ const SlotBuilderManager = {
                 sizeHandling: s.sizeHandling,
                 fileFormat: s.fileFormat,
                 loadAddress: s.loadAddr.trim(),
+                swapBytes: s.swapBytes,
                 csSelectValues: s.csValues
             });
             const label = s.label.trim();
@@ -3265,6 +3390,7 @@ const SlotBuilderManager = {
                 sizeHandling: s.sizeHandling,
                 fileFormat: s.fileFormat,
                 loadAddr: s.loadAddr.trim(),
+                swapBytes: s.swapBytes,
                 cs: s.csValues,
                 label: s.label
             }))

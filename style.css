@@ -558,6 +558,22 @@ button.gold-button:hover {
     user-select: none;
 }
 
+/* The line under Swap bytes about the image's byte order. */
+.byte-order-note {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.byte-order-note.warning {
+    color: var(--danger);
+}
+
+/* Lined up with the inputs past the 150px row label and its 10px gap. */
+#customByteOrderNote {
+    margin-left: 160px;
+    max-width: 24rem;
+}
+
 @media (max-width: 850px) {
     body {
         padding: 1rem 0.5rem;
@@ -1067,6 +1083,8 @@ button.gold-button:hover {
 #slotBuilder .sb-field-grid > .sb-cs-label { align-self: start; padding-top: 7px; }
 #slotBuilder .sb-field-grid > .sb-cs-row { align-self: start; }
 #slotBuilder .sb-rom-size { color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap; }
+#slotBuilder .sb-swap { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+#slotBuilder .sb-swap input { margin: 0; padding: 0; cursor: pointer; }
 #slotBuilder .sb-filename { color: var(--text-secondary); font-size: 0.85rem; }
 #slotBuilder .sb-filename.sb-set { color: var(--one-rom-gold); }
 #slotBuilder .sb-addr-input { max-width: 140px; }

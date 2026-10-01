@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-01
+
+- WASM v0.5.3
+- Swap bytes for 16-bit ROM types in the One ROM Builder and Custom ROM Image
+  tabs. It is ticked automatically for an image recognised as stored high byte
+  first. Amiga Kickstart images usually are.
+
 ## 2026-09-17
 
 - WASM v0.5.2, adding the `27C400Pin31A17` and `27C200Pin31NC` chip types for
