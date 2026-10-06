@@ -91,6 +91,14 @@
                     <span class="info-label">PCB Revision:</span>
                     <span id="devicePcbRevision"></span>
                 </div>
+                <div class="info-row hidden" id="deviceBoardSizeRow">
+                    <span class="info-label">Board Size:</span>
+                    <span id="deviceBoardSize"></span>
+                </div>
+                <div class="info-row hidden" id="deviceReservedPinsRow">
+                    <span class="info-label">Reserved pins:</span>
+                    <span id="deviceReservedPins"></span>
+                </div>
                 <div class="info-row hidden" id="devicePluginsRow">
                     <span class="info-label">Current plugins:</span>
                     <span id="devicePlugins"></span>
@@ -147,6 +155,9 @@
                                 <p style="margin: 0 0 0.8rem;">
                                     One image <b>per slot</b>, of any supported ROM type. The slot select jumpers encode the slot number in binary: all open is Slot 0, and the right-most jumper is the least significant bit.
                                 </p>
+                                <p style="margin: 0 0 0.8rem;">
+                                    Reserve a pin for another use, for example a pin connected to a host's reset line. One ROM doesn't use a reserved pin. Reserving a slot select jumper changes which jumpers select each slot.
+                                </p>
                                 <div class="sb-jlegend" id="slotLegend"></div>
                                 <p style="margin: 0.9rem 0 0;">
                                     For banked sets, or more than one image per slot, use <a href="/cli/" target="_blank">One ROM CLI</a>, or <a href="/studio/" target="_blank">One ROM Studio</a> with a <a href="https://github.com/piersfinlayson/one-rom/blob/main/onerom-config/README.md" target="_blank">ROM config JSON file</a>.
@@ -161,11 +172,17 @@
                                     <select id="slotPcbSelect"><option value="">Select...</option></select>
                                     <button id="slotDetectBtn" class="sb-detect-btn" type="button">Detect</button>
                                 </div>
+                                <label class="hidden" id="slotBoardSizeLabel">Board Size:</label>
+                                <select class="hidden" id="slotBoardSizeSelect"><option value="M">M</option></select>
                                 <label>Firmware Version:</label>
                                 <select id="slotVersionSelect" disabled><option value="">Select...</option></select>
+                                <label class="hidden" id="slotReserveLabel">Reserved Pins:</label>
+                                <div class="sb-reserve-row hidden" id="slotReserveRow"></div>
                             </div>
                             <div class="sb-note" id="slotDeviceNote"></div>
                             <div class="sb-note" id="slotVersionMessage"></div>
+                            <div class="sb-note" id="slotBoardSizeNote"></div>
+                            <div class="sb-note" id="slotReserveNote"></div>
 
                             <hr>
 
@@ -181,6 +198,7 @@
                                     <span><i class="sb-swatch" style="background:var(--cyan)"></i>Firmware</span>
                                     <span><i class="sb-swatch" style="background:var(--bronze)"></i>Plugin</span>
                                     <span><i class="sb-swatch" style="background:var(--one-rom-gold)"></i>ROM image</span>
+                                    <span><i class="sb-swatch" style="background:var(--wire)"></i>Unused</span>
                                     <span><i class="sb-swatch" style="background:var(--input-bg-color)"></i>Free</span>
                                 </div>
                             </div>
@@ -217,6 +235,7 @@
                             </div>
                             <div class="sb-prog-note" id="slotProgNote"></div>
                             <div class="sb-warn" id="slotOverWarn" style="display:none;"></div>
+                            <div class="sb-warn" id="slotBuildWarn" style="display:none;"></div>
                         </div>
                     </div>
 
@@ -300,6 +319,13 @@
                                     </select>
                                 </div>
                                 
+                                <div class="select-row hidden" id="customBoardSizeRow">
+                                    <label>Board Size:</label>
+                                    <select id="customBoardSizeSelect">
+                                        <option value="M">M</option>
+                                    </select>
+                                </div>
+                                
                                 <div class="select-row" id="customMcuRow">
                                     <label>MCU Variant:</label>
                                     <select id="customMcuSelect" disabled>
@@ -313,6 +339,7 @@
                                         <option value="">Select...</option>
                                     </select>
                                 </div>
+                                <div class="custom-note" id="customBoardSizeNote"></div>
                             </div>
                             
                             <!-- Right Column: ROM Configuration -->

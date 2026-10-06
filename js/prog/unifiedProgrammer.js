@@ -46,6 +46,9 @@ class UnifiedProgrammer {
         this.progressInterval = null;
         this.runMode = false;
         
+        // Whether the next OTP read resets the interface first - see readOtp().
+        this.resetBeforeOtp = true;
+
         // Speed estimates for RP2350 (bytes per second)
         this.RP2350_SPEEDS = {
             READ: 360 * 1024,    // 360 KB/s
@@ -55,7 +58,6 @@ class UnifiedProgrammer {
         
         // Flash parameters
         this.RP2350_FLASH_BASE = 0x10000000;
-        this.RP2350_SECTOR_SIZE = 4096;
     }
     
     /**
@@ -177,6 +179,7 @@ class UnifiedProgrammer {
             const estimatedMs = (length / this.RP2350_SPEEDS.READ) * 1000;
             
             this._startProgressEstimation(estimatedMs);
+            this.resetBeforeOtp = true;
             try {
                 const data = await this.picobootDevice.flashRead(
                     this.RP2350_FLASH_BASE, 
@@ -218,6 +221,7 @@ class UnifiedProgrammer {
 
         if (this.deviceType === 'Fire') {
             // flashRead reads arbitrary addresses, RAM included.
+            this.resetBeforeOtp = true;
             return await this.picobootDevice.flashRead(addr, length);
         } else if (this.deviceType === 'Ice') {
             // Ice only ever connects in STM32 DFU bootloader mode, so it is
@@ -229,46 +233,81 @@ class UnifiedProgrammer {
             throw new Error('No device connected');
         }
     }
+
+    /**
+     * Read OTP rows - parse_firmware reads a Fire's board size this way.
+     *
+     * A flash or RAM read can leave an endpoint halted, so the first OTP read
+     * after one resets the interface. The CLI resets it before its OTP reads
+     * too.
+     *
+     * @param {number} row - First row to read
+     * @param {number} count - Number of rows to read
+     * @param {boolean} ecc - true for ECC rows (16 bits each), false for raw
+     *        rows (32 bits each)
+     * @returns {Promise<Uint8Array>} The rows' raw bytes
+     */
+    async readOtp(row, count, ecc) {
+        if (!this.isConnected()) {
+            await this.connect(false);  // false = use cached if available
+        }
+
+        if (this.deviceType === 'Fire') {
+            if (this.resetBeforeOtp) {
+                await this.picobootDevice.resetInterface();
+                this.resetBeforeOtp = false;
+            }
+            return await this.picobootDevice.getConnection().otpRead(row, count, ecc);
+        } else if (this.deviceType === 'Ice') {
+            // An STM32 doesn't have OTP, so readAndParseDevice doesn't pass the
+            // parser an OTP callback for an Ice. Throw rather than return bad
+            // data.
+            throw new Error('readOtp is not supported on Ice devices');
+        } else {
+            throw new Error('No device connected');
+        }
+    }
     
     /**
      * Program firmware to device
      * @param {ArrayBuffer} fileArr - Firmware data to program
      * @param {string} mcuVariant - MCU variant (for validation)
+     * @param {Array<Object>|null} plan - Fire only: flash_plan()'s steps for
+     *        fileArr, run in order. Ice programs with DFU and doesn't use one.
      * @returns {Promise<void>}
      */
-    async runUpdateSequence(fileArr, mcuVariant) {
+    async runUpdateSequence(fileArr, mcuVariant, plan) {
         // Auto-connect if not already connected
         if (!this.isConnected()) {
             await this.connect(false);  // false = use cached if available
         }
         
         if (this.deviceType === 'Fire') {
-            const dataLength = fileArr.byteLength;
-            
-            // Calculate erase size (round up to sector size)
-            const eraseLength = Math.ceil(dataLength / this.RP2350_SECTOR_SIZE) * this.RP2350_SECTOR_SIZE;
-            
-            // Estimate total time: erase + write
-            const eraseMs = (eraseLength / this.RP2350_SPEEDS.ERASE) * 1000;
-            const writeMs = (dataLength / this.RP2350_SPEEDS.WRITE) * 1000;
-            const totalMs = eraseMs + writeMs;
+            // Estimate total time: every step's bytes at its operation's speed
+            const totalMs = plan.reduce((ms, step) => ms + (step.len /
+                (step.op === 'erase' ? this.RP2350_SPEEDS.ERASE : this.RP2350_SPEEDS.WRITE)) * 1000, 0);
             
             this._startProgressEstimation(totalMs);
             
             try {
-                dfuStatusHandler("Erasing");
-                
                 // Convert ArrayBuffer to Uint8Array if needed
                 const dataArray = fileArr instanceof Uint8Array ? 
                     fileArr : new Uint8Array(fileArr);
                 
-                // Progress continues automatically via interval
-                dfuStatusHandler("Programming");
-                
-                await this.picobootDevice.flashEraseAndWrite(
-                    this.RP2350_FLASH_BASE, 
-                    dataArray
-                );
+                // Progress continues automatically via interval. flash_plan
+                // only returns erase and write steps - it throws for any other.
+                for (const step of plan) {
+                    if (step.op === 'erase') {
+                        dfuStatusHandler("Erasing");
+                        await this.picobootDevice.flashErase(step.addr, step.len);
+                    } else {
+                        dfuStatusHandler("Programming");
+                        await this.picobootDevice.flashWrite(
+                            step.addr,
+                            dataArray.subarray(step.offset, step.offset + step.len)
+                        );
+                    }
+                }
                 
                 this._stopProgressEstimation(100);
                 dfuStatusHandler("Complete");

@@ -517,6 +517,14 @@ button.gold-button:hover {
     margin-bottom: 0.5rem;
 }
 
+/* A short informational line under a control, as the ROM Slot Builder's
+   .sb-note. */
+.custom-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
+
 .custom-cs-row {
     display: none;
 }
@@ -708,6 +716,23 @@ button.gold-button:hover {
     font-size: 0.85rem;
     white-space: nowrap;
 }
+/* :not(.hidden) as this rule outranks .hidden. */
+#slotBuilder .sb-reserve-row:not(.hidden) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+}
+#slotBuilder .sb-device-grid .sb-reserve {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    color: var(--text-color);
+    text-align: left;
+    font-size: 0.9rem;
+}
+#slotBuilder .sb-reserve input { margin: 0; cursor: pointer; }
 
 /* A short informational line under a section (empty version list, plugin rule). */
 #slotBuilder .sb-note {
@@ -950,6 +975,7 @@ button.gold-button:hover {
 #slotBuilder .sb-seg.sb-fw { background: var(--cyan); }
 #slotBuilder .sb-seg.sb-plugin { background: var(--bronze); }
 #slotBuilder .sb-seg.sb-seg-rom { background: var(--one-rom-gold); }
+#slotBuilder .sb-seg.sb-unused { background: var(--wire); }
 #slotBuilder .sb-seg.sb-over { background: var(--danger); }
 #slotBuilder .sb-cap-legend {
     display: flex;
@@ -975,6 +1001,7 @@ button.gold-button:hover {
     background: var(--bg-color);
     padding: 0.65rem 0.9rem 0.75rem;
 }
+#slotBuilder .sb-slot.sb-over { border-color: var(--danger); }
 #slotBuilder .sb-slot.sb-dragging { opacity: 0.4; }
 #slotBuilder .sb-slot.sb-drop-target { border-color: var(--one-rom-gold); box-shadow: 0 0 0 1px var(--one-rom-gold); }
 #slotBuilder .sb-slot-head {
@@ -1090,6 +1117,7 @@ button.gold-button:hover {
 #slotBuilder .sb-addr-input { max-width: 140px; }
 /* Label input fills its row but yields room for the trailing tooltip. */
 #slotBuilder .sb-label-input { flex: 1; min-width: 0; }
+#slotBuilder .sb-slot-err { color: var(--danger); font-size: 0.8rem; }
 
 #slotBuilder .sb-add-row {
     margin-top: 0.9rem;
@@ -1099,7 +1127,6 @@ button.gold-button:hover {
     flex-wrap: wrap;
 }
 #slotBuilder .sb-hint-inline { font-size: 0.8rem; color: var(--text-secondary); }
-#slotBuilder .sb-hint-inline.sb-cap { color: var(--danger); }
 
 #slotBuilder .sb-plugins-grid {
     display: grid;

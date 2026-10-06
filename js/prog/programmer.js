@@ -109,28 +109,28 @@
 //    confirmed; hasCurrentBuild() logs which field moved, so the console will
 //    say 'systemPlugin' if this is what has happened.
 //
-// 6. A One ROM's identity is only knowable from the firmware already on it.
-//    There is no hardware identifier to interrogate, so the pre-programming
-//    board check (confirmBoardBeforeProgramming) compares what the board's
-//    CURRENT firmware claims against what the image being flashed is for. Three
-//    consequences follow, and they shape the whole design:
+// 6. The pre-programming board check (confirmBoardBeforeProgramming) compares
+//    the board the image being flashed is for against the board's own type. A
+//    commissioned Fire records its type in OTP, so the check uses that whatever
+//    the flash contains, blank included.
+//
+//    An uncommissioned board, or an Ice, is only identifiable from the firmware
+//    already on it. There is no other hardware identifier to interrogate, so the
+//    check compares what the board's CURRENT firmware claims. Two consequences
+//    follow:
 //
 //    - A board that has already been mis-flashed claims to be whatever was
 //      wrongly put on it. The check therefore fires on exactly the case where
 //      the user is right and the board is lying - de-bricking - and cannot tell
 //      that apart from a user about to make the original mistake. So it WARNS
-//      and allows; blocking would prevent the repair it exists to make rarer.
+//      and allows, as blocking would prevent the repair it exists to make rarer.
 //    - A blank or unreadable board cannot be checked at all. That case falls
 //      back to asking the user to check the silkscreen, which is why the
 //      revision letter is derived from the board name (boardRevisionLabel).
-//    - Both sides of the comparison come from parse_firmware, never from the
-//      dropdowns, so the check works identically on all four tabs - including
-//      URL and Local, which only ever knew the MCU.
 //
-//    Writing board identity to the RP2350's OTP is planned. That supersedes all
-//    of this: the board would then answer for itself, the blank-board silkscreen
-//    prompt would apply only to pre-OTP boards, and a mis-flashed board would no
-//    longer be able to lie. Do not invest further here in the meantime.
+//    Both sides of the comparison come from the WASM parser, never from the
+//    dropdowns, so the check works identically on all four tabs - including
+//    URL and Local, which only ever knew the MCU.
 //
 // 7. On Fire, the USB PID *is* the run state: f540 stopped, f542 running. Any
 //    lookup that pins the PID a device was last seen with therefore cannot find
@@ -150,7 +150,7 @@
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.5.3/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.6.0/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -167,6 +167,8 @@ let dfu = new UnifiedProgrammer();
 // Manager therefore share this single init promise and the one module instance.
 let wasmInitialized = false;
 let parse_firmware;
+let parse_image_file;
+let flash_plan;
 let resolve_plugin_label;
 let wasmModule = null;
 
@@ -174,11 +176,18 @@ let wasmModule = null;
 // populate the relevant fields in the relevant tabs.
 let detectedDevice = null;
 
+// Counts presses of Connect and Detect. A tab takes a device's board size once
+// per press, so a device read after Stop, Run or programming leaves the user's
+// Board Size choice alone.
+let connectCount = 0;
+
 const wasmReady = (async function() {
     const wasm = await import(ONEROM_WASM_URL);
     await wasm.default();
     wasmModule = wasm;
     parse_firmware = wasm.parse_firmware;
+    parse_image_file = wasm.parse_image_file;
+    flash_plan = wasm.flash_plan;
     resolve_plugin_label = wasm.resolve_plugin_label;
     wasmInitialized = true;
     return wasm;
@@ -215,6 +224,7 @@ async function connectAndRead() {
     // forcePicker: the Connect button is where the user chooses which device to
     // talk to, so it always asks. Run and Stop must not - see rebootAndRead.
     await dfu.connect(true);
+    connectCount++;
     await readAndReleaseDevice();
 }
 
@@ -287,14 +297,12 @@ async function runDevice() {
 
 // Parse a One ROM firmware image held in memory.
 //
-// Uses the same parser as readAndParseDevice, so the image and the device it is
-// destined for are described by identical code and their fields are directly
-// comparable - no normalisation between the two. It understands both firmware
-// generations: v1 (Original) and v2 (Schema).
-//
-// An in-memory image has no live device behind it, so the RAM read callback
-// rejects. The parser then treats the runtime as absent, exactly as it does for
-// a stopped Fire or an Ice.
+// parse_image_file reads an image as readAndParseDevice's parser reads a
+// device, so the image and the device it is destined for are described by
+// identical code and their fields are directly comparable - no normalisation
+// between the two. It understands both firmware generations: v1 (Original) and
+// v2 (Schema). It also marks an image corrupt where its slots don't match its
+// length.
 //
 // Returns the parsed DeviceSummary, or null if the image could not be parsed.
 async function parseFirmwareImage(fileArr) {
@@ -304,9 +312,8 @@ async function parseFirmwareImage(fileArr) {
     // surface as itself, not as an unparseable image.
     await wasmReady;
 
-    const readCb = () => Promise.reject(new Error('RAM unavailable: not a running device'));
     try {
-        return await parse_firmware(new Uint8Array(fileArr), readCb);
+        return await parse_image_file(new Uint8Array(fileArr));
     } catch (error) {
         console.warn('Firmware image parse failed:', error);
         return null;
@@ -326,7 +333,8 @@ async function parseFirmwareImage(fileArr) {
 async function validateFirmware(fileArr, mcuVariant) {
     const summary = await parseFirmwareImage(fileArr);
 
-    if (summary === null || !summary.version) {
+    // A One ROM Lab image is refused too, as this programs One ROM firmware.
+    if (summary === null || summary.firmware !== 'onerom' || !summary.version) {
         throw ("Error: Invalid One ROM .bin file (not recognisable One ROM firmware)");
     }
 
@@ -440,6 +448,17 @@ function boardMismatchMessage(boardHwRev, imageHwRev) {
         'Continue?';
 }
 
+// Text for the case where the image is for a board other than the one this
+// board is commissioned as in OTP.
+function boardCommissionedMismatchMessage(commissioned, imageHwRev) {
+    return 'Board mismatch\n\n' +
+        'This board is commissioned as a ' + commissioned + ', ' +
+        'but you are about to flash firmware for a ' + imageHwRev + '.\n\n' +
+        'One ROM won\'t start with firmware for another board. It stays ' +
+        'stopped until it is programmed with ' + commissioned + ' firmware.\n\n' +
+        'Continue?';
+}
+
 // Text for the case where the board cannot tell us what it is. There is no
 // hardware identity to read - a One ROM is only identifiable from the firmware
 // already on it - so the user is asked to check the silkscreen instead.
@@ -458,16 +477,22 @@ function boardUnverifiableMessage(imageHwRev) {
 }
 
 // Confirm with the user before programming, when the board and the image
-// disagree about which board this is - or when the board cannot tell us.
+// disagree about which board this is - or when the board cannot tell us. A
+// commissioned board's type is the one in its OTP. An uncommissioned board's is
+// what the firmware on it claims.
 //
-// Deliberately warn-and-allow, never block. Flashing an image for a different
-// board is exactly what recovering a mis-flashed board looks like, so refusing
-// would prevent the very repair this check exists to make less necessary. It
-// follows that a mismatch cannot be reported as an error: the board may be the
-// one lying, and we cannot tell the two cases apart.
+// Deliberately warn-and-allow, never block. On an uncommissioned board,
+// flashing an image for a different board is exactly what recovering a
+// mis-flashed board looks like, so refusing would prevent the very repair this
+// check exists to make less necessary. It follows that a mismatch cannot be
+// reported as an error: the board's firmware may be the one lying, and we
+// cannot tell the two cases apart.
+//
+// boardSummary is the board as readAndParseDevice read it, null where its
+// flash could not be parsed.
 //
 // Returns true to proceed with programming, false if the user cancelled.
-async function confirmBoardBeforeProgramming(imageSummary) {
+function confirmBoardBeforeProgramming(imageSummary, boardSummary) {
     // With no board in the image there is nothing to compare, so there is no
     // basis on which to question the user. Should not arise for an image that
     // passed validateFirmware.
@@ -476,12 +501,13 @@ async function confirmBoardBeforeProgramming(imageSummary) {
         return true;
     }
 
-    // Re-read the board rather than trusting detectedDevice from Connect: the
-    // user may have swapped boards since. readAndParseDevice leaves the page
-    // alone, so this cannot disturb the user's selections mid-Program.
-    const { summary } = await readAndParseDevice({
-        onPhase: (phase) => dfuStatusHandler(phase)
-    });
+    // A commissioned board records its type in OTP. The image is checked against
+    // that, whatever the flash contains - a blank board included.
+    const commissioned = boardSummary?.commissioned_board;
+    if (commissioned) {
+        return commissioned === imageSummary.hw_rev ||
+            confirm(boardCommissionedMismatchMessage(commissioned, imageSummary.hw_rev));
+    }
 
     // A board's identity is only knowable from the firmware on it. Blank flash,
     // an unparseable image, and firmware that records no board all mean the same
@@ -495,15 +521,26 @@ async function confirmBoardBeforeProgramming(imageSummary) {
     // precisely when its own section parsed, which makes it the right test -
     // requiring a clean parse threw away an identity we plainly had, and told
     // the user we could not name a board the panel above had just named.
-    const boardKnown = summary !== null && !!summary.hw_rev;
+    const boardKnown = boardSummary !== null && !!boardSummary.hw_rev;
 
-    if (boardKnown && summary.hw_rev === imageSummary.hw_rev) {
+    if (boardKnown && boardSummary.hw_rev === imageSummary.hw_rev) {
         return true;
     }
 
     return confirm(boardKnown
-        ? boardMismatchMessage(summary.hw_rev, imageSummary.hw_rev)
+        ? boardMismatchMessage(boardSummary.hw_rev, imageSummary.hw_rev)
         : boardUnverifiableMessage(imageSummary.hw_rev));
+}
+
+// The alert text for an error flash_plan throws.
+function flashPlanErrorMessage(error) {
+    if (error === 'second_chip_required') {
+        return "Error: This image requires board size L.";
+    } else if (error === 'too_large') {
+        return "Error: This image is larger than the One ROM's flash.";
+    } else {
+        return "Error: " + error;
+    }
 }
 
 // This function runs the update process. It is asynchronous because the operations inside take some time
@@ -640,9 +677,42 @@ async function startUpdate() {
             }
         }
 
+        // Read the board once, for its size and what it is. Re-read rather than
+        // trusting detectedDevice from Connect: the user may have swapped boards
+        // since. readAndParseDevice leaves the page alone, so this cannot
+        // disturb the user's selections mid-Program.
+        const { summary: boardSummary } = await readAndParseDevice({
+            onPhase: (phase) => dfuStatusHandler(phase)
+        });
+
+        // Plan the flash operations for the board's size. This comes before the
+        // board check below so an image too large for the board fails without a
+        // board mismatch dialog. A Fire is an RP2350. Ice programs with DFU and
+        // doesn't use a plan.
+        let plan = null;
+        if (dfu.getDeviceType() === 'Fire') {
+            try {
+                plan = flash_plan(new Uint8Array(fileArr), 'RP2350',
+                    boardSummary?.board_size ?? 'M');
+            } catch (error) {
+                // Put a One ROM this stopped back to running. A failure here is
+                // logged so the alert still shows why the image wasn't programmed.
+                if (wasRunning) {
+                    dfuStatusHandler('Restarting');
+                    try {
+                        await dfu.rebootAndReconnect(false);
+                    } catch (rebootError) {
+                        console.error('Failed to restart One ROM: ' + rebootError);
+                    }
+                }
+                await dfu.disconnect();
+                throw flashPlanErrorMessage(error);
+            }
+        }
+
         // Check the image is for this board, warning the user if not - or if
         // the board cannot say what it is. The user has the final word.
-        if (!await confirmBoardBeforeProgramming(imageSummary)) {
+        if (!confirmBoardBeforeProgramming(imageSummary, boardSummary)) {
             // The user has said no to this image, so do not leave it one click
             // from being flashed: discard it and make them build again. Only
             // the two builder tabs have anything to discard - the other tabs
@@ -658,7 +728,7 @@ async function startUpdate() {
         }
 
         // Run the update sequence (existing code)
-        await dfu.runUpdateSequence(fileArr, mcuVariant);
+        await dfu.runUpdateSequence(fileArr, mcuVariant, plan);
 
         // Restart the One ROM if asked. Gated on the image we just flashed being
         // able to run: without a system plugin the firmware drops straight to
@@ -1122,6 +1192,37 @@ function mcusForFamily(wasm, family) {
         .map(mcu => ({ value: mcu.value, label: mcu.pretty }));
 }
 
+// Fill a Board Size <select> with the sizes a board supports and select the
+// intended size where offered, otherwise M. `shown` holds the elements visible
+// only for a board supporting more than one size - the select and its label.
+// With no board, M is the only size.
+function populateBoardSizeSelect(wasm, select, shown, board, intent) {
+    const sizes = board ? wasm.board_info(board).board_sizes : ['M'];
+    select.innerHTML = '';
+    sizes.forEach(size => {
+        const option = document.createElement('option');
+        option.value = size;
+        option.textContent = size;
+        select.appendChild(option);
+    });
+    select.value = sizes.includes(intent) ? intent : 'M';
+    shown.forEach(el => el.classList.toggle('hidden', sizes.length < 2));
+}
+
+// The board size an image is built for: the selected size where the firmware
+// version supports it, otherwise M. M until a version is selected.
+function imageBoardSize(wasm, version, size) {
+    return version && wasm.supports_board_size(version, size) ? size : 'M';
+}
+
+// The note beneath Firmware Version where the firmware version doesn't support
+// the selected board size, else ''.
+function boardSizeNote(wasm, version, size) {
+    return version && !wasm.supports_board_size(version, size)
+        ? `Firmware v${version} doesn't support board sizes other than M.`
+        : '';
+}
+
 // Firmware versions from releases.json that are compatible with a board+MCU,
 // plus the manifest's latest version. Returns { versions, latest }; the caller
 // populates its own <select> and applies its own version intent.
@@ -1498,6 +1599,12 @@ const CustomImageManager = {
     // touches this. onMcuChange re-applies it so an explicit choice survives
     // re-detects (e.g. after a flash) instead of snapping back to latest.
     versionIntent: null,
+    // User INTENT for the Board Size: the size the user chose, or the one taken
+    // from the device on Connect. onPcbChange re-applies it where the board
+    // offers it, otherwise selects M, without forgetting it. boardSizeConnect
+    // is the connectCount of the device it was last taken from.
+    boardSizeIntent: 'M',
+    boardSizeConnect: 0,
     
     async init() {
         if (this.wasmInitialized) return;
@@ -1566,6 +1673,13 @@ const CustomImageManager = {
             // placeholder) so it survives future repopulates in onMcuChange.
             this.versionIntent = e.target.value || null;
             this.onPluginVersionChange();
+            this.updateBuildButton();
+        });
+
+        // Board Size selection. A genuine user pick, recorded as intent so it
+        // survives future repopulates in onPcbChange.
+        document.getElementById('customBoardSizeSelect').addEventListener('change', (e) => {
+            this.boardSizeIntent = e.target.value;
             this.updateBuildButton();
         });
 
@@ -1640,6 +1754,7 @@ const CustomImageManager = {
             usbBoardsForFamily(this.wasm, family));
 
         // Reset downstream
+        this.populateBoardSize(null);
         this.resetSelect('customMcuSelect');
         this.resetSelect('customVersionSelect');
         this.resetSelect('customRomTypeSelect');
@@ -1661,6 +1776,7 @@ const CustomImageManager = {
     
     async onPcbChange(boardName) {
         this.selectedBoard = boardName;
+        this.populateBoardSize(boardName);
         
         // Get board info
         const boardInfo = this.wasm.board_info(boardName);
@@ -1927,6 +2043,9 @@ const CustomImageManager = {
             pcb: value('customPcbSelect'),
             mcu: value('customMcuSelect'),
             version: value('customVersionSelect'),
+            // The size built for, rather than the one selected: firmware that
+            // doesn't support the selected size builds the same image for M.
+            boardSize: this.imageBoardSize(),
             romType: value('customRomTypeSelect'),
             sizeHandling: sizeHandling ? sizeHandling.value : '',
             // File format and load address both feed the build, so a change to
@@ -2016,6 +2135,11 @@ const CustomImageManager = {
             allFilled = false;
         }
 
+        // Where the firmware doesn't support the selected Board Size, the
+        // select keeps its value and the image is built for M.
+        document.getElementById('customBoardSizeNote').textContent = boardSizeNote(
+            this.wasm, version, document.getElementById('customBoardSizeSelect').value);
+
         document.getElementById('customBuildBtn').disabled = !allFilled;
 
         // A built image belongs to the form it was built from. Once the form
@@ -2096,6 +2220,7 @@ const CustomImageManager = {
                 },
                 board: this.selectedBoard,
                 mcu_variant: this.selectedMcu,
+                board_size: this.imageBoardSize(),
                 serve_alg: 'default',
                 boot_logging: true
             };
@@ -2213,6 +2338,36 @@ const CustomImageManager = {
         const select = document.getElementById(id);
         select.innerHTML = '<option value="">Select...</option>';
         select.disabled = true;
+    },
+
+    // ---- Board Size ----------------------------------------------------
+
+    // Fill the Board Size select for a board, or for none, and re-apply the
+    // intent.
+    populateBoardSize(board) {
+        populateBoardSizeSelect(
+            this.wasm,
+            document.getElementById('customBoardSizeSelect'),
+            [document.getElementById('customBoardSizeRow')],
+            board,
+            this.boardSizeIntent);
+    },
+
+    // The board size the image is built for.
+    imageBoardSize() {
+        return imageBoardSize(
+            this.wasm,
+            document.getElementById('customVersionSelect').value,
+            document.getElementById('customBoardSizeSelect').value);
+    },
+
+    // Take the board size of the device read by the latest Connect as intent,
+    // once per Connect. A device without a size, such as an Ice, sets M. The
+    // caller re-populates the select.
+    applyDeviceBoardSize(device) {
+        if (!device || device.connectCount === this.boardSizeConnect) return;
+        this.boardSizeIntent = device.boardSize || 'M';
+        this.boardSizeConnect = device.connectCount;
     },
 
     // ---- Plugins (Fire only) -------------------------------------------
@@ -2470,6 +2625,11 @@ const SB_EMPTY_CELL = `<div class="sb-jcell"><span class="sb-pin sb-blank"></spa
 
 function sbColTokens(c) { return [].concat(c.row1 || [], c.row2 || [], c.row3 || []); }
 
+// A pin's label from its config name: "sel_c" -> "C", "x1" -> "X1".
+function sbPinLetter(pin) {
+    return pin.indexOf('sel_') === 0 ? pin.slice(4).toUpperCase() : pin.toUpperCase();
+}
+
 // Classify a physical column by the roles it carries. `sel` wins over power, so a
 // column that is e.g. SEL_B on top / GND on bottom is a select column. Power is
 // the 5V/GND pair, keyed on 5V - `gnd` alone is the bottom pad of every select
@@ -2477,10 +2637,7 @@ function sbColTokens(c) { return [].concat(c.row1 || [], c.row2 || [], c.row3 ||
 function sbClassifyColumn(c) {
     const toks = sbColTokens(c);
     const sel = toks.find(t => t.indexOf('sel_') === 0);
-    if (sel) {
-        const bit = sel.charCodeAt(4) - 97;
-        return { kind: 'select', bit, letter: String.fromCharCode(65 + bit) };
-    }
+    if (sel) return { kind: 'select', pin: sel, letter: sbPinLetter(sel) };
     if (toks.indexOf('5v') >= 0) return { kind: 'power' };
     const np = r => Array.isArray(r) && r.length === 1 && r[0] === 'np';
     if (np(c.row1) && np(c.row2)) return { kind: 'np' };
@@ -2489,20 +2646,19 @@ function sbClassifyColumn(c) {
 
 function sbSortedCols(h) { return h.columns.slice().sort((a, b) => a.col - b.col); }
 
-// The usable image-select letters: from the header when characterised (A rightmost
-// = LSB, sorted), else synthesised A..N from the jumper count.
-function sbSelLetters(header, jumpers) {
-    if (header) {
-        const ls = [];
-        sbSortedCols(header).forEach(c => {
-            const i = sbClassifyColumn(c);
-            if (i.kind === 'select') ls.push(i.letter);
-        });
-        return ls.sort();
-    }
-    const a = [];
-    for (let p = 0; p < jumpers; p++) a.push(String.fromCharCode(65 + p));
-    return a;
+// The pins a board can reserve, as config names: its image select pins, then X1
+// and X2 where it has them.
+function sbReservablePins(info) {
+    const pins = info.sel_pins.map((_, i) => 'sel_' + String.fromCharCode(97 + i));
+    if (info.pin_x1 != null) pins.push('x1');
+    if (info.pin_x2 != null) pins.push('x2');
+    return pins;
+}
+
+// "A", "A and B", "A, B and C".
+function sbAndList(items) {
+    if (items.length < 2) return items.join('');
+    return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
 }
 
 // Short board code for the wireframe label: the board name with the Fire/Ice
@@ -2517,12 +2673,8 @@ const SlotBuilderManager = {
     wasmInitialized: false,
     wasm: null,
 
-    // v2-schema floor and total flash, read once from the WASM in init(). The
-    // flash total is mcu_info('RP2350').flash_kb * 1024, which equals the budget
-    // gen_build checks against (mcu_variant('RP2350').flash_storage_bytes()), so
-    // the tally's "over" threshold matches a real over-capacity build.
+    // v2-schema floor, read once from the WASM in init().
     minSchemaVersion: null,
-    flashTotalBytes: 0,
 
     // Device config. selectedMcu is the constant 'RP2350' (exposed for C2's
     // Program step); A/B share the RP2350 firmware, so there is no selector.
@@ -2530,12 +2682,22 @@ const SlotBuilderManager = {
     selectedMcu: 'RP2350',
 
     // Board-derived, refreshed on every PCB change: the jumper-header descriptor
-    // (null when the board isn't characterised -> generic-text legend), the usable
-    // image-select jumper count (drives the slot cap and per-slot hints), and the
-    // ROM types compatible with the board.
+    // (null when the board isn't characterised -> generic-text legend), the pins
+    // the board can reserve (sbReservablePins), and the ROM types compatible with
+    // the board.
     jumperHeader: null,
-    jumpers: 0,
+    reservable: [],
     romTypes: [],
+
+    // Reserved-pin INTENT: the ticked pins' config names. A pin the selected
+    // board doesn't have stays ticked here but isn't reserved.
+    reservedIntent: new Set(),
+
+    // Refreshed by render(): the image select pins the firmware reads, lowest
+    // bit first, from image_select_pins, and each ROM slot whose layout uses a
+    // reserved pin, from slotsUsingReservedPins.
+    selectPins: [],
+    pinClashes: [],
 
     // Slots are user INTENT: an ordered array of slot objects, untouched by device
     // re-detect (mirrors versionIntent). uid gives each slot a stable id; the file
@@ -2548,6 +2710,13 @@ const SlotBuilderManager = {
     // Firmware-version INTENT: the version the user explicitly chose, or null.
     versionIntent: null,
 
+    // Board Size INTENT, as CustomImageManager's, taken from the device on
+    // Connect or Detect. boardSizeFromDevice records whether the device chose
+    // it, for the over-capacity warning.
+    boardSizeIntent: 'M',
+    boardSizeFromDevice: false,
+    boardSizeConnect: 0,
+
     // Plugins (Fire only). Same shape/flow as CustomImageManager, reading this
     // tab's own slot* ids. Intent is tracked separately from the <select> value so
     // it survives repopulation. System defaults to USB.
@@ -2559,7 +2728,7 @@ const SlotBuilderManager = {
     systemPluginIntent: 'usb',
     userPluginIntent: '',
 
-    // Whether the current segment total exceeds flash (set by updateCapacity, read
+    // Whether a slot doesn't fit on any flash chip (set by updateCapacity, read
     // by updateBuildButton to block the build).
     over: false,
 
@@ -2580,7 +2749,6 @@ const SlotBuilderManager = {
             this.wasmInitialized = true;
 
             this.minSchemaVersion = this.wasm.min_schema_version();
-            this.flashTotalBytes = this.wasm.mcu_info('RP2350').flash_kb * 1024;
 
             this.slots = [this.newSlot()];
 
@@ -2618,8 +2786,16 @@ const SlotBuilderManager = {
             // A genuine user pick; record it as intent so it survives repopulates.
             this.versionIntent = e.target.value || null;
             this.onPluginVersionChange();
-            // image_size ignores the version for v2, so the tally is unchanged, but
-            // plugin availability and build staleness may move.
+            // image_size ignores the version for v2, but the size the image is
+            // built for, plugin availability, reserved pin support and build
+            // staleness may move.
+            this.render();
+        });
+
+        document.getElementById('slotBoardSizeSelect').addEventListener('change', (e) => {
+            // A genuine user pick, recorded as intent so it survives repopulates.
+            this.boardSizeIntent = e.target.value;
+            this.boardSizeFromDevice = false;
             this.updateCapacity();
         });
 
@@ -2631,10 +2807,8 @@ const SlotBuilderManager = {
         });
 
         document.getElementById('slotAddBtn').addEventListener('click', () => {
-            if (this.slots.length < this.maxSlots()) {
-                this.slots.push(this.newSlot(this.slots[this.slots.length - 1]));
-                this.render();
-            }
+            this.slots.push(this.newSlot(this.slots[this.slots.length - 1]));
+            this.render();
         });
 
         document.getElementById('slotDetectBtn').addEventListener('click', () => this.detectDevice());
@@ -2712,23 +2886,54 @@ const SlotBuilderManager = {
         };
     },
 
-    maxSlots() { return 1 << this.jumpers; },   // 2^(image-select jumpers)
+    maxSlots() { return 1 << this.selectPins.length; },   // 2^(image select pins read)
     version() { return document.getElementById('slotVersionSelect').value; },
+    boardSize() { return document.getElementById('slotBoardSizeSelect').value; },
+    imageBoardSize() { return imageBoardSize(this.wasm, this.version(), this.boardSize()); },
+
+    // The reserved pins as config names, in board order: the ticked pins the
+    // selected board has.
+    reservedPins() {
+        if (!this.selectedBoard) return [];
+        return this.reservable.filter(p => this.reservedIntent.has(p));
+    },
+
+    // Whether pins are reserved and the selected firmware doesn't support
+    // reserved pins.
+    reservedUnsupported() {
+        const version = this.version();
+        return this.reservedPins().length > 0 && !!version && !this.wasm.supports_reserved_pins(version);
+    },
+
+    // " with C and D reserved" where image select pins are reserved, else "".
+    withReservedJumpers() {
+        const letters = this.reservedPins().filter(p => p.indexOf('sel_') === 0).map(sbPinLetter);
+        return letters.length ? ` with ${sbAndList(letters)} reserved` : '';
+    },
+
+    // Whether the jumpers can't select slot i.
+    unselectable(i) { return !!this.selectedBoard && i >= this.maxSlots(); },
+
+    // The reserved pin slot i uses, or undefined.
+    pinClash(i) {
+        const clash = this.pinClashes.find(c => c.card === i);
+        return clash && clash.pin;
+    },
 
     async onBoardChange(boardName) {
         this.selectedBoard = boardName;
         const info = this.wasm.board_info(boardName);
         this.jumperHeader = info.jumper_header || null;
-        this.jumpers = info.sel_pins.length;
+        this.reservable = sbReservablePins(info);
         this.romTypes = compatibleRomTypesForBoard(this.wasm, boardName, []);
 
-        // Trim slots if the new board selects fewer, and drop any slot type no
-        // longer compatible (the picker will show "- select -" again).
-        if (this.slots.length > this.maxSlots()) this.slots.length = this.maxSlots();
+        // Drop any slot type no longer compatible (the picker will show
+        // "- select -" again).
         this.slots.forEach(s => {
             if (s.typeAlias && !this.romTypes.includes(s.typeAlias)) s.typeAlias = '';
         });
 
+        this.populateBoardSize();
         await this.loadVersions();
         this.render();
     },
@@ -2750,6 +2955,7 @@ const SlotBuilderManager = {
         const message = document.getElementById('slotVersionMessage');
         message.className = 'sb-note';
         message.textContent = '';
+        this.populateBoardSize();
 
         this.render();
     },
@@ -2799,6 +3005,12 @@ const SlotBuilderManager = {
     },
 
     render() {
+        this.selectPins = this.selectedBoard
+            ? this.wasm.image_select_pins(this.selectedBoard, this.reservedPins())
+            : [];
+        this.pinClashes = this.slotsUsingReservedPins();
+
+        this.renderReserveRow();
         this.renderLegend();
 
         const host = document.getElementById('slotList');
@@ -2811,26 +3023,39 @@ const SlotBuilderManager = {
         document.getElementById('slotCount').textContent =
             '(' + this.slots.length + (this.slots.length === 1 ? ' slot)' : ' slots)');
 
-        // With no board there is no jumper count, so the slot cap is meaningless:
-        // disable Add with a short prompt rather than a bogus "0 jumpers" message.
+        // A slot's ROM types come from the board, so Add is disabled without one.
         const noBoard = !this.selectedBoard;
-        const atCap = !noBoard && this.slots.length >= this.maxSlots();
-        document.getElementById('slotAddBtn').disabled = noBoard || atCap;
-        const addHint = document.getElementById('slotAddHint');
-        if (noBoard) {
-            addHint.className = 'sb-hint-inline';
-            addHint.textContent = 'Select a One ROM type to add slots.';
-        } else if (atCap) {
-            addHint.className = 'sb-hint-inline sb-cap';
-            addHint.textContent =
-                `This board's ${this.jumpers} jumper${this.jumpers > 1 ? 's' : ''} ` +
-                `select up to ${this.maxSlots()} slots. For more, use the One ROM CLI.`;
-        } else {
-            addHint.className = 'sb-hint-inline';
-            addHint.textContent = '';
-        }
+        document.getElementById('slotAddBtn').disabled = noBoard;
+        document.getElementById('slotAddHint').textContent =
+            noBoard ? 'Select a One ROM type to add slots.' : '';
 
         this.updateCapacity();
+    },
+
+    // The Reserved Pins row: a box per pin the board can reserve, and the note
+    // where the firmware doesn't support reserved pins.
+    renderReserveRow() {
+        const row = document.getElementById('slotReserveRow');
+        const shown = !!this.selectedBoard && this.reservable.length > 0;
+        document.getElementById('slotReserveLabel').classList.toggle('hidden', !shown);
+        row.classList.toggle('hidden', !shown);
+        row.innerHTML = this.reservable.map(p =>
+            `<label class="sb-reserve" title="${p.toUpperCase()}">` +
+            `<input type="checkbox" data-pin="${p}" ${this.reservedIntent.has(p) ? 'checked' : ''}><span>${sbPinLetter(p)}</span></label>`
+        ).join('') +
+            `<span class="help-text" title="Reserve a pin for another use, for example a pin connected to a host's reset line. Requires firmware v0.8.0 or later.">&#9432;</span>`;
+        row.querySelectorAll('input').forEach(box => box.addEventListener('change', e => {
+            if (e.target.checked) this.reservedIntent.add(e.target.dataset.pin);
+            else this.reservedIntent.delete(e.target.dataset.pin);
+            this.render();
+        }));
+
+        const note = document.getElementById('slotReserveNote');
+        const unsupported = this.reservedUnsupported();
+        note.className = unsupported ? 'sb-note sb-error' : 'sb-note';
+        note.textContent = unsupported
+            ? `Firmware v${this.version()} doesn't support reserved pins. Choose v0.8.0 or later, or untick the reserved pins.`
+            : '';
     },
 
     // ---- Jumper legend + per-slot hint (ported from the mockup) -------------
@@ -2852,17 +3077,21 @@ const SlotBuilderManager = {
         }
 
         const h = this.jumperHeader;
-        const letters = sbSelLetters(h, this.jumpers);
+        const letters = this.selectPins.map(sbPinLetter);
         const jlist = letters.join('/');
         const plural = letters.length > 1;
+        const reserved = this.reservedPins().map(sbPinLetter);
         const hasPower = !!h && sbSortedCols(h).some(c => sbClassifyColumn(c).kind === 'power');
 
-        // The general encoding rule is in the mainline Help; the box carries this
-        // One ROM's revision-specific detail: which jumpers select the slot, and
-        // the 5V/GND warning, alongside the wireframe.
+        // The general encoding rule is in the mainline Help. The box beside the
+        // wireframe contains this One ROM's revision-specific detail: which
+        // jumpers select the slot, the reserved pins and the 5V/GND warning.
         const note =
             `<div class="sb-legend-note">` +
-                `<p>This One ROM's slot select jumper${plural ? 's' : ''}: <b>${jlist}</b>${plural ? ` (<b>A</b> is the least significant bit)` : ''}.</p>` +
+                (letters.length
+                    ? `<p>This One ROM's slot select jumper${plural ? 's' : ''}: <b>${jlist}</b>${plural ? ` (<b>${letters[0]}</b> is the least significant bit)` : ''}.</p>`
+                    : `<p>Every slot select pin is reserved so One ROM serves Slot 0 at power on.</p>`) +
+                (reserved.length ? `<p>Reserved: <b>${reserved.join(', ')}</b>.</p>` : ``) +
                 (hasPower ? `<p>The left-most pair is <b>5V/GND</b> &mdash; never jumper.</p>` : ``) +
             `</div>`;
 
@@ -2878,6 +3107,8 @@ const SlotBuilderManager = {
                 const info = sbClassifyColumn(c);
                 if (info.kind === 'power')
                     cells += `<div class="sb-jcell sb-power"><span class="sb-pin" title="5V / GND &mdash; power, never jumper">${SB_CROSS}</span><span class="sb-lbl">5V<br>GND</span></div>`;
+                else if (info.kind === 'select' && !this.selectPins.includes(info.pin))
+                    cells += `<div class="sb-jcell"><span class="sb-pin sb-unavail" title="${info.letter} is reserved &mdash; not a slot select jumper">${SB_CROSS}</span><span class="sb-lbl">${info.letter}</span></div>`;
                 else if (info.kind === 'select')
                     cells += `<div class="sb-jcell sb-active"><span class="sb-pin sb-sel" title="Jumper ${info.letter}"></span><span class="sb-lbl">${info.letter}</span></div>`;
                 else if (info.kind === 'np')
@@ -2892,7 +3123,7 @@ const SlotBuilderManager = {
         } else {
             host.innerHTML =
                 note +
-                `<div class="sb-caveat">This One ROM's jumper header isn't drawn yet &mdash; check the silkscreen for jumper${plural ? 's' : ''} <b>${jlist}</b>.</div>`;
+                (letters.length ? `<div class="sb-caveat">This One ROM's jumper header isn't drawn yet &mdash; check the silkscreen for jumper${plural ? 's' : ''} <b>${jlist}</b>.</div>` : ``);
         }
     },
 
@@ -2904,9 +3135,11 @@ const SlotBuilderManager = {
         if (!this.selectedBoard) {
             return `<span class="sb-jhint sb-jhint-empty"><span>Select a One ROM type</span></span>`;
         }
-        const closed = [];
-        for (let bit = 0; bit < this.jumpers; bit++) if ((i >> bit) & 1) closed.push(String.fromCharCode(65 + bit));
-        const text = i === 0 ? 'all jumpers open' : 'close jumper' + (closed.length > 1 ? 's' : '') + ' ' + closed.join(', ');
+        if (this.unselectable(i)) {
+            return `<span class="sb-jhint"><span class="sb-slot-err">cannot be selected by jumpers${this.withReservedJumpers()}</span></span>`;
+        }
+        const closed = this.selectPins.filter((_, bit) => (i >> bit) & 1);
+        const text = i === 0 ? 'all jumpers open' : 'close jumper' + (closed.length > 1 ? 's' : '') + ' ' + closed.map(sbPinLetter).join(', ');
         const h = this.jumperHeader;
         if (!h) return `<span class="sb-jhint"><span>${text}</span></span>`;
         const cols = sbSortedCols(h);
@@ -2919,7 +3152,8 @@ const SlotBuilderManager = {
             if (!c) { pins += `<span class="sb-pin sb-blank"></span>`; continue; }
             const info = sbClassifyColumn(c);
             if (info.kind === 'power') pins += `<span class="sb-pin sb-power" title="5V/GND &mdash; leave alone">${SB_CROSS}</span>`;
-            else if (info.kind === 'select') { const on = (i >> info.bit) & 1; pins += `<span class="sb-pin${on ? ' sb-closed' : ' sb-sel'}" title="Jumper ${info.letter}"></span>`; }
+            else if (info.kind === 'select' && !this.selectPins.includes(info.pin)) pins += `<span class="sb-pin sb-unavail" title="${info.letter} is reserved">${SB_CROSS}</span>`;
+            else if (info.kind === 'select') pins += `<span class="sb-pin${closed.includes(info.pin) ? ' sb-closed' : ' sb-sel'}" title="Jumper ${info.letter}"></span>`;
             else if (info.kind === 'np') pins += `<span class="sb-pin sb-blank"></span>`;
             else pins += `<span class="sb-pin sb-unavail">${SB_CROSS}</span>`;
         }
@@ -2944,6 +3178,7 @@ const SlotBuilderManager = {
         }
         const is16 = is16BitChip(this.wasm, s.typeAlias);
         const note = is16 ? byteOrderNote(s.byteOrder, s.swapBytes) : null;
+        const clash = this.pinClash(i);
 
         const typeOpts = ['<option value="">&mdash; select &mdash;</option>']
             .concat(this.romTypes.map(a =>
@@ -3002,6 +3237,7 @@ const SlotBuilderManager = {
                 <div class="sb-field-grid">
                     <label>ROM Type:</label>
                     <div class="sb-row-inline"><select class="sb-rtype sb-rtype-select">${typeOpts}</select>${sizeBytes ? `<span class="sb-rom-size">Size: ${sbKb(sizeBytes)}</span>` : ''}</div>
+                    ${clash ? `<span></span><div class="sb-slot-err">This slot requires a fly-lead to ${clash}, which is a reserved pin. Untick ${clash} or choose another ROM type.</div>` : ''}
 
                     ${is16 ? `<label>Byte order:</label>
                     <div class="sb-row-inline">
@@ -3033,10 +3269,11 @@ const SlotBuilderManager = {
                 </div>
             </div>`;
 
-        // Wire events. Text inputs (description, load address) and the CS / size-
-        // handling dropdowns update state WITHOUT a re-render, so typing keeps
-        // focus; only structural changes (type, file, format, Swap bytes,
-        // add/remove/move) rebuild the card list.
+        // Wire events. Text inputs (description, load address) and the size-
+        // handling dropdown update state WITHOUT a re-render, so typing keeps
+        // focus. Only structural changes (type, file, format, Swap bytes, CS,
+        // add/remove/move) rebuild the card list. A CS can move a slot onto a
+        // reserved pin.
         el.querySelector('.sb-label-input').addEventListener('input', e => { s.label = e.target.value; this.onInputChanged(); });
         el.querySelector('.sb-rtype').addEventListener('change', e => { s.typeAlias = e.target.value; this.render(); });
         el.querySelector('.sb-pick').addEventListener('click', () => el.querySelector('.sb-file-input').click());
@@ -3048,7 +3285,7 @@ const SlotBuilderManager = {
         const addr = el.querySelector('.sb-addr-input');
         if (addr) addr.addEventListener('input', e => { s.loadAddr = e.target.value; this.onInputChanged(); });
         el.querySelectorAll('.sb-cs-select').forEach(sel =>
-            sel.addEventListener('change', e => { s.csValues[+e.target.dataset.cs] = e.target.value; this.onInputChanged(); }));
+            sel.addEventListener('change', e => { s.csValues[+e.target.dataset.cs] = e.target.value; this.render(); }));
 
         el.querySelector('.sb-up').addEventListener('click', () => this.move(i, i - 1));
         el.querySelector('.sb-down').addEventListener('click', () => this.move(i, i + 1));
@@ -3110,19 +3347,58 @@ const SlotBuilderManager = {
         this.render();
     },
 
-    // A non-structural input changed (description, load address, CS, size
+    // A non-structural input changed (description, load address, size
     // handling): no re-render, but the built image may be stale and the Build
     // gate may move.
     onInputChanged() { this.updateBuildButton(); },
 
+    // ---- Board Size ---------------------------------------------------------
+
+    // Fill the Board Size select for the selected board and re-apply the intent.
+    populateBoardSize() {
+        const select = document.getElementById('slotBoardSizeSelect');
+        populateBoardSizeSelect(
+            this.wasm,
+            select,
+            [document.getElementById('slotBoardSizeLabel'), select],
+            this.selectedBoard,
+            this.boardSizeIntent);
+    },
+
+    // Take the board size of the device read by the latest Connect or Detect as
+    // intent, once per press. A device without a size, such as One ROM Lab,
+    // sets M. Returns whether it was taken.
+    applyDeviceBoardSize(device) {
+        if (!device || device.connectCount === this.boardSizeConnect) return false;
+        this.boardSizeIntent = device.boardSize || 'M';
+        this.boardSizeFromDevice = !!device.boardSize;
+        this.boardSizeConnect = device.connectCount;
+        return true;
+    },
+
+    // Whether the One ROM may be size L: Board Size is M because a device didn't
+    // set it, and the board and firmware support L.
+    boardSizeMayBeL() {
+        const version = this.version();
+        return this.boardSize() === 'M' && !this.boardSizeFromDevice
+            && !!this.selectedBoard && !!version
+            && this.wasm.board_info(this.selectedBoard).board_sizes.includes('L')
+            && this.wasm.supports_board_size(version, 'L');
+    },
+
     // ---- Flash tally --------------------------------------------------------
 
+    // flash_layout places the slots as gen_build does, for the size the image is
+    // built for, so the bar and its "over" match a real build.
     updateCapacity() {
         const version = this.version() || this.minSchemaVersion;
-        const segs = [];
-        segs.push({ cls: 'sb-fw', bytes: FIRMWARE_SIZE + MAX_METADATA_LEN, label: `Firmware ${sbKb(FIRMWARE_SIZE + MAX_METADATA_LEN)}` });
-        if (this.selectedSystemPlugin) segs.push({ cls: 'sb-plugin', bytes: SLOT_PLUGIN_SIZE, label: `System plugin ${sbKb(SLOT_PLUGIN_SIZE)}` });
-        if (this.selectedUserPlugin) segs.push({ cls: 'sb-plugin', bytes: SLOT_PLUGIN_SIZE, label: `User plugin ${sbKb(SLOT_PLUGIN_SIZE)}` });
+
+        // Every slot in config order, as buildConfig orders them: plugins, then
+        // the ROM slots. flash_layout's sections index this list, and `card` is
+        // a ROM slot's index in this.slots.
+        const slots = [];
+        if (this.selectedSystemPlugin) slots.push({ cls: 'sb-plugin', bytes: SLOT_PLUGIN_SIZE, label: `System plugin ${sbKb(SLOT_PLUGIN_SIZE)}` });
+        if (this.selectedUserPlugin) slots.push({ cls: 'sb-plugin', bytes: SLOT_PLUGIN_SIZE, label: `User plugin ${sbKb(SLOT_PLUGIN_SIZE)}` });
         // Per-slot ROM sizing needs a board (image_size is board-specific). With no
         // board selected the slots are preserved but not sized here - the tally is
         // not meaningful without a board and Build is disabled anyway.
@@ -3136,32 +3412,63 @@ const SlotBuilderManager = {
                 // happen; if it does, count it as 0 rather than breaking the bar.
                 console.warn('image_size failed for', s.typeAlias, error);
             }
-            if (b) segs.push({ cls: 'sb-seg-rom', bytes: b, label: `Slot ${i} ${sbKb(b)}` });
+            if (b) slots.push({ cls: 'sb-seg-rom', bytes: b, label: `Slot ${i} ${sbKb(b)}`, card: i });
         });
 
-        const total = this.flashTotalBytes;
-        const used = segs.reduce((a, x) => a + x.bytes, 0);
-        this.over = used > total;
+        const layout = this.wasm.flash_layout(
+            this.selectedMcu, this.imageBoardSize(), slots.map(s => s.bytes));
+        const total = layout.total;
 
-        // Render segments proportional to the total flash; clamp overflow, mark
-        // the offending segment red.
+        // The first slot that doesn't fit on any flash chip, or null. The
+        // sections stop before it.
+        const notFit = layout.does_not_fit ?? null;
+        this.over = notFit !== null;
+
+        // Used counts every slot from the one that doesn't fit on, so "over"
+        // shows by how much the slots exceed the flash.
+        const used = layout.sections.reduce((a, sec) => a + (sec.kind === 'unused' ? 0 : sec.len), 0)
+            + (this.over ? slots.slice(notFit).reduce((a, s) => a + s.bytes, 0) : 0);
+
+        // Render each section at its offset, proportional to the total flash.
+        // The slot that doesn't fit on any flash chip follows in red, clamped to
+        // the space left.
         const bar = document.getElementById('slotCapBar');
         bar.innerHTML = '';
-        let acc = 0;
-        for (const seg of segs) {
-            const remaining = Math.max(0, total - acc);
-            const shown = Math.min(seg.bytes, remaining);
-            acc += seg.bytes;
+        const pct = n => (n / total * 100) + '%';
+        let end = 0;
+        const addSeg = (cls, offset, len, label) => {
             const d = document.createElement('div');
-            d.className = 'sb-seg ' + seg.cls + (seg.bytes > shown ? ' sb-over' : '');
-            d.style.width = (shown / total * 100) + '%';
-            d.title = seg.label;
+            d.className = 'sb-seg ' + cls;
+            d.style.marginLeft = pct(offset - end);
+            d.style.width = pct(len);
+            d.title = label;
             bar.appendChild(d);
+            end = offset + len;
+        };
+        for (const sec of layout.sections) {
+            if (sec.kind === 'firmware') {
+                addSeg('sb-fw', sec.offset, sec.len, `Firmware ${sbKb(sec.len)}`);
+            } else if (sec.kind === 'slot') {
+                addSeg(slots[sec.slot].cls, sec.offset, sec.len, slots[sec.slot].label);
+            } else {
+                addSeg('sb-unused', sec.offset, sec.len,
+                    `Unused ${sbKb(sec.len)} - only a slot of ${sbKb(sec.len)} or smaller fits here`);
+            }
         }
+        if (this.over) {
+            const s = slots[notFit];
+            addSeg(s.cls + ' sb-over', end, Math.min(s.bytes, total - end), s.label);
+        }
+
+        // That slot's card shows red too, as does the card of a slot the
+        // jumpers can't select or one using a reserved pin.
+        const overCard = this.over ? slots[notFit].card : undefined;
+        document.querySelectorAll('#slotList .sb-slot').forEach((el, i) =>
+            el.classList.toggle('sb-over', i === overCard || this.unselectable(i) || !!this.pinClash(i)));
 
         document.getElementById('slotCapWrap').classList.toggle('sb-over', this.over);
         document.getElementById('slotCapFigs').innerHTML =
-            `${sbKb(used)} / ${sbKb(total)} used &nbsp;&middot;&nbsp; ${this.over ? sbKb(used - total) + ' over' : sbKb(total - used) + ' free'}`;
+            `${sbKb(used)} / ${sbKb(total)} used &nbsp;&middot;&nbsp; ${used > total ? sbKb(used - total) + ' over' : sbKb(total - used) + ' free'}`;
 
         this.updateBuildButton();
     },
@@ -3173,7 +3480,21 @@ const SlotBuilderManager = {
         const pluginMsg = this.getPluginValidationMessage();
         this.showPluginMessage(pluginMsg);
 
-        const ok = board && version && filled && !this.over && !pluginMsg;
+        // Lines under Build. A reserved pin problem disables Build. Slots the
+        // jumpers can't select leave it enabled.
+        const problems = [];
+        if (this.reservedUnsupported()) problems.push('Reserved pins require firmware v0.8.0 or later.');
+        this.pinClashes.forEach(c => problems.push(`Slot ${c.card} uses reserved pin ${c.pin}.`));
+        const warnings = [];
+        const first = this.maxSlots();
+        if (board && this.slots.length > first) {
+            const last = this.slots.length - 1;
+            const which = first === last ? `Slot ${first}` : `Slots ${first} to ${last}`;
+            warnings.push(`${which} cannot be selected by jumpers${this.withReservedJumpers()}.`);
+        }
+        const lines = problems.concat(warnings);
+
+        const ok = board && version && filled && !this.over && !pluginMsg && !problems.length;
         document.getElementById('slotBuildBtn').disabled = !ok;
 
         // A built image belongs to the form it was built from; once the form moves
@@ -3183,14 +3504,26 @@ const SlotBuilderManager = {
         const note = document.getElementById('slotProgNote');
         if (!board || !version) note.textContent = '';
         else if (!filled) note.textContent = 'Every slot needs an image and ROM type.';
-        else if (this.over || pluginMsg) note.textContent = '';
+        else if (this.over || pluginMsg || lines.length) note.textContent = '';
         else note.textContent = 'Ready to build.';
+
+        const buildWarn = document.getElementById('slotBuildWarn');
+        buildWarn.style.display = lines.length ? 'block' : 'none';
+        buildWarn.innerText = lines.join('\n');
 
         const warn = document.getElementById('slotOverWarn');
         warn.style.display = this.over ? 'block' : 'none';
         warn.textContent = this.over
             ? 'These images exceed the flash capacity. Remove a slot, or choose ROM types with smaller image sizes.'
             : '';
+        if (this.over && this.boardSizeMayBeL()) {
+            warn.append(document.createElement('br'), 'If your One ROM is size L, set Board Size to L.');
+        }
+
+        // Where the firmware doesn't support the selected Board Size, the select
+        // keeps its value and the image is built for M.
+        document.getElementById('slotBoardSizeNote').textContent =
+            boardSizeNote(this.wasm, version, this.boardSize());
 
         // Keep the shared Program button in step with the build state (it gates on
         // hasCurrentBuild for this tab). Without this, a fresh build enables Save
@@ -3204,40 +3537,100 @@ const SlotBuilderManager = {
     // The build config: plugin chip_sets first (system then user), then one
     // single-ROM set per slot, in slot order.
     //
-    // Each slot gets a UNIQUE config `file` key (index-prefixed), so gen never
-    // dedupes two slots that happen to share a filename - each slot's bytes are
-    // served correctly, even for distinct files with the same name. The config
-    // `label` field is what the metadata records in place of the synthetic `file`
-    // key, and is what shows on device read-back: the user's Label when given,
-    // else the real filename.
+    // The config `label` field is what the metadata records in place of the
+    // synthetic `file` key (see slotRomConfig), and is what shows on device
+    // read-back: the user's Label when given, else the real filename.
     buildConfig() {
         const chipSets = this.getPluginChipSets();
         this.slotFileMap = new Map();
 
         this.slots.forEach((s, i) => {
-            const key = `${i}:${s.filename}`;
-            this.slotFileMap.set(key, s.fileBytes);
+            const romConfig = this.slotRomConfig(s, i);
+            this.slotFileMap.set(romConfig.file, s.fileBytes);
 
-            const romConfig = buildRomConfig(this.wasm, {
-                fileName: key,
-                chipType: s.typeAlias,
-                sizeHandling: s.sizeHandling,
-                fileFormat: s.fileFormat,
-                loadAddress: s.loadAddr.trim(),
-                swapBytes: s.swapBytes,
-                csSelectValues: s.csValues
-            });
             const label = s.label.trim();
             romConfig.label = label || s.filename;
 
             chipSets.push({ type: 'single', roms: [romConfig] });
         });
 
-        return {
+        return this.configOf(chipSets);
+    },
+
+    // Slot i's ROM config. Each slot gets a UNIQUE config `file` key
+    // (index-prefixed), so gen never dedupes two slots that happen to share a
+    // filename - each slot's bytes are served correctly, even for distinct
+    // files with the same name. A slot without a file has the prefix alone.
+    slotRomConfig(s, i) {
+        return buildRomConfig(this.wasm, {
+            fileName: `${i}:${s.filename || ''}`,
+            chipType: s.typeAlias,
+            sizeHandling: s.sizeHandling,
+            fileFormat: s.fileFormat,
+            loadAddress: s.loadAddr.trim(),
+            swapBytes: s.swapBytes,
+            csSelectValues: s.csValues
+        });
+    },
+
+    // A config of chipSets, with the reserved pins where any is ticked.
+    configOf(chipSets) {
+        const config = {
             version: 1,
             description: `ROM Slot Builder: ${this.slots.length} slot${this.slots.length === 1 ? '' : 's'}`,
             rom_sets: chipSets
         };
+        const reserved = this.reservedPins();
+        if (reserved.length) config.reserved_pins = reserved;
+        return config;
+    },
+
+    // The firmware properties gen builds for.
+    buildProperties() {
+        const versionParts = this.version().split('.');
+        return {
+            version: {
+                major: parseInt(versionParts[0]),
+                minor: parseInt(versionParts[1]),
+                patch: parseInt(versionParts[2]),
+                build: 0
+            },
+            board: this.selectedBoard,
+            mcu_variant: this.selectedMcu,
+            board_size: this.imageBoardSize(),
+            serve_alg: 'default',
+            boot_logging: true
+        };
+    },
+
+    // ROM slots whose layout uses a reserved pin, as { card, pin }, card being
+    // the slot's index in this.slots. gen checks a config of the ROM slots
+    // alone, so plugins don't shift the slot numbers. It works before any file
+    // is loaded. A slot without a ROM type is left out. Where gen can't check
+    // the config the result is empty, and Build fails with gen's error.
+    slotsUsingReservedPins() {
+        const version = this.version();
+        if (!this.selectedBoard || !version || !this.reservedPins().length || this.reservedUnsupported()) return [];
+
+        const cards = [];
+        const chipSets = [];
+        this.slots.forEach((s, i) => {
+            if (!s.typeAlias) return;
+            cards.push(i);
+            chipSets.push({ type: 'single', roms: [this.slotRomConfig(s, i)] });
+        });
+
+        const family = this.wasm.board_info(this.selectedBoard).mcu_family;
+        let builder = null;
+        try {
+            builder = this.wasm.gen_builder_from_json(version, family, JSON.stringify(this.configOf(chipSets)));
+            return this.wasm.gen_slots_using_reserved_pins(builder, this.buildProperties())
+                .map(u => ({ card: cards[u.slot], pin: u.pin }));
+        } catch {
+            return [];
+        } finally {
+            if (builder) builder.free();
+        }
     },
 
     async buildFirmware() {
@@ -3286,22 +3679,8 @@ const SlotBuilderManager = {
                 }
             }
 
-            const versionParts = version.split('.');
-            const properties = {
-                version: {
-                    major: parseInt(versionParts[0]),
-                    minor: parseInt(versionParts[1]),
-                    patch: parseInt(versionParts[2]),
-                    build: 0
-                },
-                board: this.selectedBoard,
-                mcu_variant: this.selectedMcu,
-                serve_alg: 'default',
-                boot_logging: true
-            };
-
             buildBtn.textContent = 'Building metadata...';
-            const images = this.wasm.gen_build(builder, properties);
+            const images = this.wasm.gen_build(builder, this.buildProperties());
             const metadata = new Uint8Array(images.metadata);
             const romImages = new Uint8Array(images.firmware_images);
 
@@ -3381,6 +3760,9 @@ const SlotBuilderManager = {
         return JSON.stringify({
             board: this.selectedBoard,
             version: this.version(),
+            // The size built for, as in CustomImageManager.configSignature.
+            boardSize: this.imageBoardSize(),
+            reservedPins: this.reservedPins(),
             systemPlugin: this.selectedSystemPlugin ? this.selectedSystemPlugin.url : '',
             userPlugin: this.selectedUserPlugin ? this.selectedUserPlugin.url : '',
             slots: this.slots.map(s => ({
@@ -3780,6 +4162,9 @@ function applyDetectedDeviceToPrebuilt() {
 async function applyDetectedDeviceToCustom() {
     if (!CustomImageManager.wasmInitialized) return;
 
+    // Before onPcbChange below, which shows the size where the board offers it.
+    CustomImageManager.applyDeviceBoardSize(detectedDevice);
+
     const device = detectedDevice ?? {
         model: 'Fire',
         hw_rev: 'fire-28-a',
@@ -3818,7 +4203,8 @@ async function applyDetectedDeviceToCustom() {
 // device. Unlike the Custom tab, the slot list is user INTENT and is NEVER
 // touched here (see the architectural notes at the top of this file, and the
 // versionIntent/slots handling in SlotBuilderManager): only the board picker and,
-// through it, the version picker reconcile with the device.
+// through it, the version picker reconcile with the device, and the Board Size
+// once per Connect or Detect.
 //
 // The builder is Fire-only (its version floor is the v2 schema, which Ice never
 // reaches). So an Ice - or any board not in the Fire-only picker - reconciles
@@ -3849,13 +4235,19 @@ async function applyDetectedDeviceToSlots() {
         return;
     }
 
-    // A Fire whose board this tab offers: apply it, reconciling board + version
-    // only (never the slots). Anything else - no device, or an unrecognised
-    // board - leaves the current selection untouched, so the tab opens on
-    // "Select..." until the user picks a board or hits Detect.
-    if (onOffer && hwRev !== SlotBuilderManager.selectedBoard) {
-        pcbSelect.value = hwRev;
-        await SlotBuilderManager.onBoardChange(hwRev);
+    // A Fire whose board this tab offers: apply it, reconciling board, version
+    // and Board Size only (never the slots). Anything else - no device, or an
+    // unrecognised board - leaves the current selection untouched, so the tab
+    // opens on "Select..." until the user picks a board or hits Detect.
+    if (onOffer) {
+        const sizeTaken = SlotBuilderManager.applyDeviceBoardSize(device);
+        if (hwRev !== SlotBuilderManager.selectedBoard) {
+            pcbSelect.value = hwRev;
+            await SlotBuilderManager.onBoardChange(hwRev);
+        } else if (sizeTaken) {
+            SlotBuilderManager.populateBoardSize();
+            SlotBuilderManager.updateCapacity();
+        }
     }
 }
 
@@ -3902,12 +4294,18 @@ async function readAndParseDevice({ onPhase = () => {} } = {}) {
         ? (addr, len) => dfu.readMemory(addr, len)
         : () => Promise.reject(new Error('RAM unavailable: device not running'));
 
-    // Parse the flash image; RAM is fetched on demand through readCb. A parse
-    // error means unrecognisable contents, not a failure to read, so it is
-    // contained here rather than thrown.
+    // OTP read callback handed to parse_firmware, which calls it to read a
+    // Fire's board size from OTP, running or stopped. An Ice doesn't have OTP.
+    const otpCb = dfu.getDeviceType() === 'Fire'
+        ? (row, count, ecc) => dfu.readOtp(row, count, ecc)
+        : undefined;
+
+    // Parse the flash image. RAM and OTP are fetched on demand through readCb
+    // and otpCb. A parse error means unrecognisable contents, not a failure to
+    // read, so it is contained here rather than thrown.
     const tryParse = async (data) => {
         try {
-            return await parse_firmware(data, readCb);
+            return await parse_firmware(data, readCb, otpCb);
         } catch (error) {
             console.warn('Firmware parse failed:', error);
             return null;
@@ -3930,19 +4328,61 @@ async function readAndParseDevice({ onPhase = () => {} } = {}) {
     return { summary, firmwareData };
 }
 
+// Show the Board Size row with the size a Fire One ROM records - M, L, other or
+// unknown - or hide it for a device without one.
+function displayBoardSize(size) {
+    document.getElementById('deviceBoardSize').textContent = size || '';
+    document.getElementById('deviceBoardSizeRow').classList.toggle('hidden', !size);
+}
+
 // Render the device summary for a board whose firmware we cannot interpret:
-// everything but the status line is unknown, and the details pane is hidden
-// because there is nothing to put in it.
-function displayUninterpretableFirmware(status) {
+// everything but the status line, the board size and a commissioned board type
+// is unknown, and the details pane is hidden because there is nothing to put in
+// it. A Fire records its board size and commissioned board type in OTP, so a
+// board without readable firmware can still show them. summary is the parse,
+// or null where there isn't one.
+function displayUninterpretableFirmware(status, summary = null) {
     document.getElementById('deviceStatus').textContent = status;
     document.getElementById('deviceVersion').textContent = 'Unknown';
     document.getElementById('deviceMcu').textContent = 'Unknown';
     document.getElementById('deviceConfig').textContent = 'N/A';
-    document.getElementById('devicePcbRevision').textContent = 'Unknown';
+    document.getElementById('devicePcbRevision').textContent =
+        summary?.commissioned_board || 'Unknown';
+    displayBoardSize(summary?.recorded_board_size);
+    document.getElementById('deviceReservedPinsRow').classList.add('hidden');
     document.getElementById('devicePluginsRow').classList.add('hidden');
     document.getElementById('deviceSummary').classList.remove('hidden');
     document.getElementById('deviceDetailsContent').textContent = '';
     document.getElementById('deviceDetails').classList.add('hidden');
+}
+
+// Store a device read for pre-population of the programming tabs, and apply
+// it to them. canRun comes straight from the WASM (has the USB system plugin)
+// rather than being re-derived here.
+//
+// Not gated on a clean parse: errors are recorded per section, so a device
+// whose ROM sets failed to parse can still have reported its board and MCU
+// perfectly well. Refusing to pre-populate on any error left such a device's
+// tabs on their defaults - pointing the user at the wrong board. Each field is
+// used only when it is present, which is the same test.
+//
+// A commissioned board's type in OTP stands in for the board its firmware
+// records, blank flash included. Only a Fire has OTP, so a commissioned board
+// is a Fire and an RP2350 whatever the flash contains.
+function setDetectedDevice(summary) {
+    const commissioned = summary.commissioned_board;
+    detectedDevice = {
+        model: commissioned ? 'fire' : (summary.model || '').toLowerCase() || null,
+        hw_rev: commissioned || summary.hw_rev || null,
+        mcu: commissioned ? 'RP2350' : summary.mcu || null,
+        canRun: summary.can_run,
+        // The size to build for, and the Connect or Detect that read it.
+        boardSize: summary.board_size || null,
+        connectCount,
+    };
+    applyDetectedDeviceToPrebuilt();
+    applyDetectedDeviceToCustom();
+    applyDetectedDeviceToSlots();
 }
 
 async function readAndDisplayDeviceInfo() {
@@ -3967,25 +4407,47 @@ async function readAndDisplayDeviceInfo() {
         }
 
         // No version means this is not recognisable One ROM firmware. Tell a
-        // blank (all-0xFF) chip apart from unrecognised contents.
-        if (!summary.version) {
+        // blank (all-0xFF) chip apart from unrecognised contents. A Lab whose
+        // contents could not be read is still shown as a Lab.
+        const lab = summary.firmware === 'lab';
+        if (!summary.version && !lab) {
             const allFF = firmwareData.every(byte => byte === 0xFF);
             displayUninterpretableFirmware(allFF
                 ? '✘ - No firmware (blank/erased chip)'
-                : '✘ - Unrecognized firmware');
+                : '✘ - Unrecognized firmware', summary);
+            // A commissioned board's type is still in OTP, so the tabs
+            // pre-populate from it.
+            if (summary.commissioned_board) {
+                setDetectedDevice(summary);
+            }
             updateDeviceButtons();
             return;
         }
 
-        // Status: a corrupt parse overrides everything; otherwise the run state
-        // comes from the USB interface (authoritative), not the parse.
-        document.getElementById('deviceStatus').textContent = summary.corrupt
-            ? '⚠ - One ROM firmware corrupt'
-            : '✔ - One ROM firmware good (' + (dfu.isRunMode() ? 'Running' : 'Stopped') + ')';
+        // Status: firmware for a board type other than the one commissioned in
+        // OTP overrides everything, then a corrupt parse. The run state comes
+        // from the USB interface (authoritative), not the parse.
+        const firmwareName = lab ? 'One ROM Lab firmware' : 'One ROM firmware';
+        const runState = dfu.isRunMode() ? 'Running' : 'Stopped';
+        const typeMismatch = summary.commissioned_board && summary.hw_rev &&
+            summary.commissioned_board !== summary.hw_rev;
+        document.getElementById('deviceStatus').textContent = typeMismatch
+            ? `✘ - Board type mismatch: firmware type ${summary.hw_rev}, commissioned type ${summary.commissioned_board} (${runState})`
+            : summary.corrupt
+            ? `⚠ - ${firmwareName} corrupt`
+            : `✔ - ${firmwareName} good (${runState})`;
 
-        document.getElementById('deviceVersion').textContent = summary.version;
+        document.getElementById('deviceVersion').textContent = summary.version || 'Unknown';
         document.getElementById('deviceMcu').textContent = summary.mcu || 'Unknown';
-        document.getElementById('devicePcbRevision').textContent = summary.hw_rev || 'Unknown';
+        // A commissioned board's type is in OTP, in place of the firmware's.
+        document.getElementById('devicePcbRevision').textContent =
+            summary.commissioned_board || summary.hw_rev || 'Unknown';
+        displayBoardSize(summary.recorded_board_size);
+
+        // Reserved pins get their own line, shown only when any is reserved.
+        const reserved = summary.reserved_pins || [];
+        document.getElementById('deviceReservedPins').textContent = reserved.join(', ');
+        document.getElementById('deviceReservedPinsRow').classList.toggle('hidden', reserved.length === 0);
 
         // Plugins get their own line, shown only when present. The active entry
         // (running devices only) is marked. The labels are the raw image
@@ -4006,7 +4468,10 @@ async function readAndDisplayDeviceInfo() {
 
         // ROMs line, truncated to the first three.
         const romLabels = summary.roms.map(formatRomEntry);
-        if (romLabels.length === 0) {
+        if (lab) {
+            // Lab doesn't serve ROMs.
+            document.getElementById('deviceConfig').textContent = 'N/A';
+        } else if (romLabels.length === 0) {
             document.getElementById('deviceConfig').textContent = 'No ROMs';
         } else if (romLabels.length <= 3) {
             document.getElementById('deviceConfig').textContent = romLabels.join(', ');
@@ -4015,25 +4480,7 @@ async function readAndDisplayDeviceInfo() {
                 `${romLabels.slice(0, 3).join(', ')} (+${romLabels.length - 3} more)`;
         }
 
-        // Store for pre-population of the programming tabs. canRun comes straight
-        // from the WASM (has the USB system plugin) rather than being re-derived
-        // here.
-        //
-        // Not gated on a clean parse: errors are recorded per section, so a
-        // device whose ROM sets failed to parse can still have reported its
-        // board and MCU perfectly well. Refusing to pre-populate on any error
-        // left such a device's tabs on their defaults - pointing the user at
-        // the wrong board. Each field is used only when it is present, which is
-        // the same test.
-        detectedDevice = {
-            model: (summary.model || '').toLowerCase() || null,
-            hw_rev: summary.hw_rev || null,
-            mcu: summary.mcu || null,
-            canRun: summary.can_run,
-        };
-        applyDetectedDeviceToPrebuilt();
-        applyDetectedDeviceToCustom();
-        applyDetectedDeviceToSlots();
+        setDetectedDevice(summary);
 
         // Show summary and details.
         document.getElementById('deviceSummary').classList.remove('hidden');

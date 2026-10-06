@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-06
+
+- WASM v0.6.0, for firmware v0.8.0
+- Web supports commissioning information and L sized boards
+- A connected One ROM Lab is identified
+- A One ROM Lab image fails to program
+- One ROM Builder supports reading and writing reserved pins
+
 ## 2026-10-01
 
 - WASM v0.5.3
