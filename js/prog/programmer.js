@@ -150,7 +150,7 @@
 
 import { compareChips } from '/js/site/utils.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.6.0/pkg/onerom_wasm.js';
+const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.6.1/pkg/onerom_wasm.js';
 //const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
 const FIRMWARE_SIZE = 48 * 1024;  // 48KB
@@ -2882,7 +2882,8 @@ const SlotBuilderManager = {
             byteOrder: undefined,
             byteOrderKey: null,
             csValues: prev ? [...prev.csValues] : ['active_low', 'active_low', 'active_low'],
-            label: ''
+            label: '',
+            standby: false
         };
     },
 
@@ -2903,6 +2904,13 @@ const SlotBuilderManager = {
     reservedUnsupported() {
         const version = this.version();
         return this.reservedPins().length > 0 && !!version && !this.wasm.supports_reserved_pins(version);
+    },
+
+    // Whether a slot is in standby mode and the selected firmware doesn't
+    // support standby mode.
+    standbyUnsupported() {
+        const version = this.version();
+        return this.slots.some(s => s.standby) && !!version && !this.wasm.supports_standby(version);
     },
 
     // " with C and D reserved" where image select pins are reserved, else "".
@@ -3220,6 +3228,7 @@ const SlotBuilderManager = {
                         <span class="file-button sb-pick">Upload Image</span>
                         <input type="file" class="sb-file-input" accept=".bin,.rom,.hex,.ihex,.ihx,.mcs,.s19,.s28,.s37,.srec,.mot" style="display:none">
                         <span class="sb-filename ${s.filename ? 'sb-set' : ''}">${s.filename ? sbAttr(s.filename) : 'No file selected'}</span>
+                        ${s.filename ? '<button class="sb-icon-btn sb-clear-file" title="Remove image">&#10005;</button>' : ''}
                     </div>
                     <label>Format:</label>
                     <div class="sb-row-inline">
@@ -3239,7 +3248,7 @@ const SlotBuilderManager = {
                     <div class="sb-row-inline"><select class="sb-rtype sb-rtype-select">${typeOpts}</select>${sizeBytes ? `<span class="sb-rom-size">Size: ${sbKb(sizeBytes)}</span>` : ''}</div>
                     ${clash ? `<span></span><div class="sb-slot-err">This slot requires a fly-lead to ${clash}, which is a reserved pin. Untick ${clash} or choose another ROM type.</div>` : ''}
 
-                    ${is16 ? `<label>Byte order:</label>
+                    ${is16 ? `<label>Options:</label>
                     <div class="sb-row-inline">
                         <label class="sb-swap"><input type="checkbox" class="sb-swap-input" ${s.swapBytes ? 'checked' : ''}><span>Swap bytes</span></label>
                         <span class="help-text" title="Swaps each pair of bytes in the image. Required for a 16-bit image stored high byte first as 68000 ROM images such as Amiga Kickstart usually are. Set automatically when the image's first bytes identify its byte order.">&#9432;</span>
@@ -3260,24 +3269,38 @@ const SlotBuilderManager = {
                     ${csCount ? `<label class="sb-cs-label">Chip selects:</label><div class="sb-row-inline sb-cs-row">${csUnits.join('')}</div>` : ''}
                 </div>
 
+                <div class="sb-group-title">Slot</div>
                 <div class="sb-field-grid">
                     <label>Label:</label>
                     <div class="sb-row-inline">
                         <input type="text" class="sb-label-input" placeholder="optional, e.g. C64 KERNAL 901227-03" value="${sbAttr(s.label)}">
                         <span class="help-text" title="A short name for this ROM image, stored in the firmware metadata and shown when the device is read back. Replaces the filename as the image's label; leave blank to use the uploaded filename.">&#9432;</span>
                     </div>
+                    <label>Options:</label>
+                    <div class="sb-row-inline">
+                        <label class="sb-standby"><input type="checkbox" class="sb-standby-input" ${s.standby ? 'checked' : ''}><span>Standby Mode</span></label>
+                        <span class="help-text" title="With standby mode selected, One ROM doesn't serve a ROM for this slot. The image is optional.">&#9432;</span>
+                    </div>
                 </div>
             </div>`;
 
         // Wire events. Text inputs (description, load address) and the size-
         // handling dropdown update state WITHOUT a re-render, so typing keeps
-        // focus. Only structural changes (type, file, format, Swap bytes, CS,
-        // add/remove/move) rebuild the card list. A CS can move a slot onto a
-        // reserved pin.
+        // focus. Only structural changes (type, file, format, Swap bytes,
+        // Standby Mode, CS, add/remove/move) rebuild the card list. A CS can
+        // move a slot onto a reserved pin.
         el.querySelector('.sb-label-input').addEventListener('input', e => { s.label = e.target.value; this.onInputChanged(); });
         el.querySelector('.sb-rtype').addEventListener('change', e => { s.typeAlias = e.target.value; this.render(); });
         el.querySelector('.sb-pick').addEventListener('click', () => el.querySelector('.sb-file-input').click());
         el.querySelector('.sb-file-input').addEventListener('change', e => this.onFileChange(s, e));
+        const clearFile = el.querySelector('.sb-clear-file');
+        if (clearFile) clearFile.addEventListener('click', () => {
+            s.filename = null;
+            s.fileBytes = null;
+            s.fileGen = ++this.fileGeneration;
+            this.render();
+        });
+        el.querySelector('.sb-standby-input').addEventListener('change', e => { s.standby = e.target.checked; this.render(); });
         el.querySelector('.sb-fmt').addEventListener('change', e => { s.fileFormat = e.target.value; this.render(); });
         el.querySelector('.sb-sh').addEventListener('change', e => { s.sizeHandling = e.target.value; this.onInputChanged(); });
         const swap = el.querySelector('.sb-swap-input');
@@ -3403,7 +3426,8 @@ const SlotBuilderManager = {
         // board selected the slots are preserved but not sized here - the tally is
         // not meaningful without a board and Build is disabled anyway.
         if (this.selectedBoard) this.slots.forEach((s, i) => {
-            if (!s.typeAlias) return;
+            // A standby slot without an image doesn't occupy flash.
+            if (!s.typeAlias || (s.standby && !s.fileBytes)) return;
             let b = 0;
             try {
                 b = this.wasm.image_size(this.selectedBoard, s.typeAlias, version);
@@ -3476,14 +3500,22 @@ const SlotBuilderManager = {
     updateBuildButton() {
         const board = this.selectedBoard;
         const version = this.version();
-        const filled = this.slots.length >= 1 && this.slots.every(s => s.fileBytes && s.typeAlias);
+        const unready = [];
+        this.slots.forEach((s, i) => {
+            const imageMissing = !s.fileBytes && !s.standby;
+            if (imageMissing && !s.typeAlias) unready.push(`Slot ${i} requires an image and ROM type.`);
+            else if (imageMissing) unready.push(`Slot ${i} requires an image.`);
+            else if (!s.typeAlias) unready.push(`Slot ${i} requires a ROM type.`);
+        });
+        const filled = this.slots.length >= 1 && !unready.length;
         const pluginMsg = this.getPluginValidationMessage();
         this.showPluginMessage(pluginMsg);
 
-        // Lines under Build. A reserved pin problem disables Build. Slots the
-        // jumpers can't select leave it enabled.
+        // Lines under Build. A reserved pin or standby mode problem disables
+        // Build. Slots the jumpers can't select leave it enabled.
         const problems = [];
         if (this.reservedUnsupported()) problems.push('Reserved pins require firmware v0.8.0 or later.');
+        if (this.standbyUnsupported()) problems.push('Standby mode requires firmware v0.8.0 or later.');
         this.pinClashes.forEach(c => problems.push(`Slot ${c.card} uses reserved pin ${c.pin}.`));
         const warnings = [];
         const first = this.maxSlots();
@@ -3503,7 +3535,7 @@ const SlotBuilderManager = {
 
         const note = document.getElementById('slotProgNote');
         if (!board || !version) note.textContent = '';
-        else if (!filled) note.textContent = 'Every slot needs an image and ROM type.';
+        else if (!filled) note.innerText = unready.join('\n');
         else if (this.over || pluginMsg || lines.length) note.textContent = '';
         else note.textContent = 'Ready to build.';
 
@@ -3545,24 +3577,32 @@ const SlotBuilderManager = {
         this.slotFileMap = new Map();
 
         this.slots.forEach((s, i) => {
-            const romConfig = this.slotRomConfig(s, i);
-            this.slotFileMap.set(romConfig.file, s.fileBytes);
+            const chipSet = this.slotChipSet(s, i);
+            const romConfig = chipSet.roms[0];
+            if (s.fileBytes) this.slotFileMap.set(romConfig.file, s.fileBytes);
 
-            const label = s.label.trim();
-            romConfig.label = label || s.filename;
+            const label = s.label.trim() || s.filename;
+            if (label) romConfig.label = label;
 
-            chipSets.push({ type: 'single', roms: [romConfig] });
+            chipSets.push(chipSet);
         });
 
         return this.configOf(chipSets);
     },
 
+    slotChipSet(s, i) {
+        const chipSet = { type: 'single', roms: [this.slotRomConfig(s, i)] };
+        if (s.standby) chipSet.firmware_overrides = { fire: { standby: true } };
+        return chipSet;
+    },
+
     // Slot i's ROM config. Each slot gets a UNIQUE config `file` key
     // (index-prefixed), so gen never dedupes two slots that happen to share a
     // filename - each slot's bytes are served correctly, even for distinct
-    // files with the same name. A slot without a file has the prefix alone.
+    // files with the same name. A slot without a file has the prefix alone. A
+    // standby slot without an image doesn't have a `file`.
     slotRomConfig(s, i) {
-        return buildRomConfig(this.wasm, {
+        const romConfig = buildRomConfig(this.wasm, {
             fileName: `${i}:${s.filename || ''}`,
             chipType: s.typeAlias,
             sizeHandling: s.sizeHandling,
@@ -3571,6 +3611,8 @@ const SlotBuilderManager = {
             swapBytes: s.swapBytes,
             csSelectValues: s.csValues
         });
+        if (s.standby && !s.fileBytes) delete romConfig.file;
+        return romConfig;
     },
 
     // A config of chipSets, with the reserved pins where any is ticked.
@@ -3617,7 +3659,7 @@ const SlotBuilderManager = {
         this.slots.forEach((s, i) => {
             if (!s.typeAlias) return;
             cards.push(i);
-            chipSets.push({ type: 'single', roms: [this.slotRomConfig(s, i)] });
+            chipSets.push(this.slotChipSet(s, i));
         });
 
         const family = this.wasm.board_info(this.selectedBoard).mcu_family;
@@ -3774,7 +3816,8 @@ const SlotBuilderManager = {
                 loadAddr: s.loadAddr.trim(),
                 swapBytes: s.swapBytes,
                 cs: s.csValues,
-                label: s.label
+                label: s.label,
+                standby: s.standby
             }))
         });
     },

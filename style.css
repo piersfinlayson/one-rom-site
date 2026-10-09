@@ -1065,7 +1065,8 @@ button.gold-button:hover {
 }
 #slotBuilder .sb-icon-btn:hover:not(:disabled) { background: var(--button-hover-color); }
 #slotBuilder .sb-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-#slotBuilder .sb-icon-btn.sb-remove:hover:not(:disabled) { background: var(--danger-dim); border-color: var(--danger); }
+#slotBuilder .sb-icon-btn.sb-remove:hover:not(:disabled),
+#slotBuilder .sb-icon-btn.sb-clear-file:hover { background: var(--danger-dim); border-color: var(--danger); }
 
 #slotBuilder .sb-slot-body { display: flex; flex-direction: column; gap: 0.35rem; }
 #slotBuilder .sb-group-title {
@@ -1110,8 +1111,10 @@ button.gold-button:hover {
 #slotBuilder .sb-field-grid > .sb-cs-label { align-self: start; padding-top: 7px; }
 #slotBuilder .sb-field-grid > .sb-cs-row { align-self: start; }
 #slotBuilder .sb-rom-size { color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap; }
-#slotBuilder .sb-swap { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
-#slotBuilder .sb-swap input { margin: 0; padding: 0; cursor: pointer; }
+#slotBuilder .sb-swap,
+#slotBuilder .sb-standby { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.875rem; }
+#slotBuilder .sb-swap input,
+#slotBuilder .sb-standby input { margin: 0; padding: 0; cursor: pointer; }
 #slotBuilder .sb-filename { color: var(--text-secondary); font-size: 0.85rem; }
 #slotBuilder .sb-filename.sb-set { color: var(--one-rom-gold); }
 #slotBuilder .sb-addr-input { max-width: 140px; }

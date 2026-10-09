@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-09
+
+- WASM v0.6.1
+- One ROM Builder supports standby mode
+
 ## 2026-10-06
 
 - WASM v0.6.0, for firmware v0.8.0
