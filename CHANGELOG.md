@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The URL Firmware Image tab displays a clearer error when a URL returns a web page or can't be downloaded
+
 ## 2026-10-09
 
 - WASM v0.6.1

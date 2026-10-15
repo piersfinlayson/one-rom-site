@@ -581,7 +581,13 @@ async function startUpdate() {
             }
 
             // Fetch the firmware file from the URL
-            let response = await fetch(fileLocationBox.value);
+            let response;
+            try {
+                response = await fetch(fileLocationBox.value);
+            } catch (error) {
+                console.warn('Firmware download failed:', error);
+                throw ("Error: Couldn't download from this URL. The server may not allow downloads from other websites. Download the file and use the Local Firmware Image tab");
+            }
 
             // Check for HTTP errors
             if (!response.ok) {
@@ -592,6 +598,15 @@ async function startUpdate() {
                 } else {
                     throw ("Error: Failed to download firmware file (" + response.status + " " + response.statusText + ")");
                 }
+            }
+
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.startsWith('text/html')) {
+                // Drive's direct download link is blocked cross-site as well
+                if (new URL(fileLocationBox.value).hostname === 'drive.google.com') {
+                    throw ("Error: Google Drive files can't be loaded from a URL. Download the file and use the Local Firmware Image tab");
+                }
+                throw ("Error: The URL returned a web page, not a firmware file. Use a direct download link");
             }
 
             // Get the firmware data as an array buffer
