@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-10-15
 
 - The URL Firmware Image tab displays a clearer error when a URL returns a web page or can't be downloaded
 
