@@ -31,6 +31,10 @@ const ONEROM_USB_DEVICES = [
 // device is back in under a second or the grant does not exist.
 const REBOOT_REENUMERATE_TIMEOUT_MS = 2500;
 
+// Bytes each Fire FLASH_WRITE command writes. Writing a step in chunks lets the
+// progress bar follow the write and the console log show where a write stopped.
+const WRITE_CHUNK_BYTES = 64 * 1024;
+
 function isOneRomDevice(device) {
     return ONEROM_USB_DEVICES.some(known =>
         known.vendorId === device.vendorId && known.productId === device.productId);
@@ -283,29 +287,50 @@ class UnifiedProgrammer {
         }
         
         if (this.deviceType === 'Fire') {
-            // Estimate total time: every step's bytes at its operation's speed
-            const totalMs = plan.reduce((ms, step) => ms + (step.len /
-                (step.op === 'erase' ? this.RP2350_SPEEDS.ERASE : this.RP2350_SPEEDS.WRITE)) * 1000, 0);
-            
-            this._startProgressEstimation(totalMs);
-            
+            // Progress counts each operation's bytes at its estimated speed
+            const estimateMs = (op, len) => (len /
+                (op === 'erase' ? this.RP2350_SPEEDS.ERASE : this.RP2350_SPEEDS.WRITE)) * 1000;
+            const totalMs = plan.reduce((ms, step) => ms + estimateMs(step.op, step.len), 0);
+            const showProgress = (ms) => dfuProgressHandler(Math.floor((ms / totalMs) * 100));
+            let doneMs = 0;
+
+            dfuProgressHandler(1);
+
             try {
                 // Convert ArrayBuffer to Uint8Array if needed
                 const dataArray = fileArr instanceof Uint8Array ? 
                     fileArr : new Uint8Array(fileArr);
                 
-                // Progress continues automatically via interval. flash_plan
-                // only returns erase and write steps - it throws for any other.
+                // flash_plan only returns erase and write steps - it throws for
+                // any other.
                 for (const step of plan) {
                     if (step.op === 'erase') {
                         dfuStatusHandler("Erasing");
+
+                        // An erase is one command, so its progress is the time
+                        // taken, up to its estimate
+                        const stepMs = estimateMs(step.op, step.len);
+                        const startTime = Date.now();
+                        this.progressInterval = setInterval(() => showProgress(
+                            doneMs + Math.min(Date.now() - startTime, stepMs)), 100);
+
                         await this.picobootDevice.flashErase(step.addr, step.len);
+
+                        clearInterval(this.progressInterval);
+                        this.progressInterval = null;
+                        doneMs += stepMs;
                     } else {
                         dfuStatusHandler("Programming");
-                        await this.picobootDevice.flashWrite(
-                            step.addr,
-                            dataArray.subarray(step.offset, step.offset + step.len)
-                        );
+                        for (let chunk = 0; chunk < step.len; chunk += WRITE_CHUNK_BYTES) {
+                            const len = Math.min(WRITE_CHUNK_BYTES, step.len - chunk);
+                            const start = step.offset + chunk;
+                            await this.picobootDevice.flashWrite(
+                                step.addr + chunk,
+                                dataArray.subarray(start, start + len)
+                            );
+                            doneMs += estimateMs(step.op, len);
+                            showProgress(doneMs);
+                        }
                     }
                 }
                 

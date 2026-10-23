@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-22
+
+- The progress bar follows a Fire's write as it is programmed
+
 ## 2026-10-15
 
 - The URL Firmware Image tab displays a clearer error when a URL returns a web page or can't be downloaded
