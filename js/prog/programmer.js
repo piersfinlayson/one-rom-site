@@ -821,6 +821,14 @@ async function startUpdate() {
         // Reset the button and progress bar
         dfuDisconnectHandler();
 
+        // A timed out transfer closes the device, so the next Program starts
+        // with a fresh connection
+        try {
+            await dfu.disconnect();
+        } catch (e) {
+            // Ignore disconnect errors
+        }
+
         // Show the error as an alert
         alert(error);
     }
