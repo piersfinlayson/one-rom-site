@@ -1,36 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-
-@font-face {
-  font-family: 'Michroma';
-  src: url('/fonts/Michroma-Regular.ttf') format('truetype');
-  font-display: swap;
-}
-
-:root {
-    --text-color: #e2e8f0;
-    --text-secondary: #9a9aa8;
-    --bg-color: #181820;
-    --bg-secondary: #28282f;
-    --input-bg-color: #3a3a42;
-    --button-bg-color: #4a4a52;
-    --button-hover-color: #5a5a62;
-    --button-click-color: #3e3e46;
-    --button-disabled-color: #4a4a52;
-    --border-color: #4a4a52;
-    --one-rom-gold: #ffb700;
-    --one-rom-gold-darker: #cc9200;
-    --one-rom-gold-darker2: #e6a000;
-    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    /* ROM Slot Builder palette (board wireframe, jumper cells, flash tally) */
-    --wire: #7a7a86;
-    --cyan: #2fb6cf;
-    --power: #b0563a;
-    --bronze: #8a6a2f;
-    --danger: #e5484d;
-    --danger-dim: #7a2a2d;
-    --mono: 'Courier New', Consolas, monospace;
-}
+@import url('/theme.css');
 
 * {
     margin: 0;
