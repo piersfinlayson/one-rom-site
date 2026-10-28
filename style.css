@@ -534,6 +534,10 @@ button.gold-button:hover {
     user-select: none;
 }
 
+a.help-text {
+    cursor: pointer;
+}
+
 /* The line under Swap bytes about the image's byte order. */
 .byte-order-note {
     color: var(--text-secondary);

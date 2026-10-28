@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/style.css">
+    <link rel="shortcut icon" href="/images/favicon.png" type="image/x-icon" />
+
+    <!-- SEO title & description -->
+    <title>Identify Your One ROM</title>
+    <meta name="description" content="Identify which One ROM Fire board you have">
+    <link rel="canonical" href="https://onerom.org/identify/" />
+
+    <!-- Open Graph for social media -->
+    <meta property="og:url" content="https://onerom.org/identify/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Identify Your One ROM | piers.rocks">
+    <meta property="og:description" content="Identify which One ROM Fire board you have">
+    <meta property="og:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="twitter:domain" content="onerom.org">
+    <meta property="twitter:url" content="https://onerom.org/identify/">
+    <meta name="twitter:title" content="Identify Your One ROM | piers.rocks">
+    <meta name="twitter:description" content="Identify which One ROM Fire board you have">
+    <meta name="twitter:image" content="/images/one-rom/one%20rom%20image%20social.png">
+
+    <style>
+        /* Board colours. --shade darkens the grey rendered mask to the colour's
+           brightness, then --mask sets its hue. */
+        body[data-colour="red"] { --mask: #e94c3a; --shade: #acacac; }
+        body[data-colour="green"] { --mask: #1e6e3c; --shade: #727272; }
+        body[data-colour="black"] { --mask: #282828; --shade: #393939; }
+
+        .picker {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0.5rem 0;
+        }
+
+        .picker.hidden {
+            display: none;
+        }
+
+        .picker-label {
+            width: 4rem;
+            color: var(--text-secondary);
+        }
+
+        .picker button {
+            margin: 0;
+            min-width: 4rem;
+            padding: 0.4rem 0.9rem;
+            color: var(--text-secondary);
+            background-color: var(--bg-color);
+        }
+
+        .picker button.active {
+            color: var(--one-rom-gold);
+            border-color: var(--one-rom-gold);
+            background-color: var(--input-bg-color);
+        }
+
+        .board {
+            margin-top: 1.5rem;
+            padding: 1rem 1.25rem;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .board.linked {
+            border-color: var(--one-rom-gold);
+        }
+
+        .board h3 {
+            display: flex;
+            align-items: baseline;
+            gap: 0.75rem;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .board .revisions {
+            margin: 0 0 0.75rem 0;
+        }
+
+        .board .revisions .picker-label {
+            width: auto;
+        }
+
+        .board-body {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .sides {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        figure {
+            margin: 0;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .pcb {
+            position: relative;
+            isolation: isolate;
+            width: 180px;
+            cursor: zoom-in;
+        }
+
+        .pcb img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .pcb .layer {
+            position: absolute;
+            inset: 0;
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+        }
+
+        .pcb .shade { background: var(--shade); mix-blend-mode: multiply; }
+        .pcb .hue { background: var(--mask); mix-blend-mode: color; }
+        .pcb .gold { background: #ffd159; mix-blend-mode: multiply; display: none; }
+        body[data-finish="enig"] .pcb .gold { display: block; }
+
+        .facts {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 0.25rem 1rem;
+            align-content: start;
+            font-size: 0.9rem;
+        }
+
+        .facts dt { color: var(--text-secondary); }
+        .facts dd { margin: 0; }
+
+        #lightbox {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgb(0 0 0 / 0.85);
+            cursor: zoom-out;
+            z-index: 10;
+        }
+
+        #lightbox.open { display: flex; }
+        #lightbox .pcb { width: auto; height: 92vh; cursor: zoom-out; }
+        #lightbox .pcb img { width: auto; height: 100%; }
+    </style>
+</head>
+
+<!-- Page HTML content -->
+
+<body data-colour="red" data-finish="hasl">
+    <div class="app">
+
+        <!-- Title -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0rem; border-bottom: 1px solid var(--border-color);">
+            <h1 style="margin-bottom: 0; border-bottom: none;">Identify Your One R<span class="o-in-rom">O</span>M</h1>
+            <div style="display: flex; gap: 1rem;">
+                <a href="/" class="gold-button"><span class="michroma">Home</span></a>
+            </div>
+        </div>
+
+        <p>
+            Select your One ROM's pin count and compare it with the pictures.
+        </p>
+
+        <div class="picker" id="pinsPicker"><span class="picker-label">Pins</span></div>
+        <div class="picker hidden" id="usbPicker"><span class="picker-label">USB</span></div>
+        <div class="picker" id="colourPicker"><span class="picker-label">Colour</span></div>
+        <div class="picker" id="finishPicker"><span class="picker-label">Pads</span></div>
+
+        <div id="boards"></div>
+
+        <div id="footer"></div>
+        <script src="/js/site/footer.js"></script>
+
+    </div>
+
+    <div id="lightbox"></div>
+
+    <script>
+        const USB = {
+            flat: 'USB-C flat',
+            upright: 'USB-C upright',
+            'micro-b': 'Micro-B',
+            none: 'No USB',
+        };
+
+        // Newest first within each pin count. A board with several PCB
+        // revisions lists them newest first too.
+        const BOARDS = [
+            { name: 'fire-24-g', pins: 24, usb: 'upright', rgb: true, back: false,
+              pcbs: [{ image: 'fire-24-g', front: 'Fire 24G', rear: '24G' }] },
+            { name: 'fire-24-f', pins: 24, usb: 'flat', rgb: true, back: false,
+              pcbs: [{ image: 'fire-24-f', front: 'Fire 24F', rear: '24F' }] },
+            { name: 'fire-24-e', pins: 24, usb: 'flat', rgb: false, back: false,
+              pcbs: [{ image: 'fire-24-e', front: 'Fire 24 Rev E', rear: '24E' }] },
+            { name: 'fire-24-d', pins: 24, usb: 'micro-b', rgb: false, back: false,
+              pcbs: [{ image: 'fire-24-d', front: 'Fire 24D', rear: 'Fire rev D' }] },
+            { name: 'fire-24-c', pins: 24, usb: 'micro-b', rgb: false, back: false,
+              pcbs: [{ image: 'fire-24-c', front: 'Fire 24C', rear: 'Fire rev C' }] },
+            { name: 'fire-24-usb-b', pins: 24, usb: 'micro-b', rgb: false, back: false,
+              pcbs: [{ image: 'fire-24-usb-b', front: 'Fire rev B', rear: 'Fire rev B' }] },
+            { name: 'fire-24-a', pins: 24, usb: 'none', rgb: false, back: false,
+              pcbs: [{ image: 'fire-24-a', front: 'pA2', rear: '23pA2' }] },
+
+            { name: 'fire-28-d', pins: 28, usb: 'upright', rgb: true, back: true,
+              pcbs: [{ image: 'fire-28-d', front: '28D', rear: 'Fire 28 Rev D2' }] },
+            { name: 'fire-28-c', pins: 28, usb: 'flat', rgb: true, back: true,
+              pcbs: [{ image: 'fire-28-c', front: '28C C1', rear: 'Fire 28 Rev C1' }] },
+            { name: 'fire-28-b', pins: 28, usb: 'upright', rgb: false, back: false,
+              pcbs: [{ image: 'fire-28-b', front: 'Fire 28 Rev B', rear: 'Fire 28 Rev B' }] },
+            { name: 'fire-28-a', pins: 28, usb: 'flat', rgb: false, back: false,
+              pcbs: [
+                  { revision: 'A4', image: 'fire-28-a4', front: 'Fire A4', rear: 'Fire 28 rev A4' },
+                  { revision: 'A3', image: 'fire-28-a3', front: 'Fire 28 A3', rear: 'Fire 28 rev A3' },
+                  { revision: 'A2', image: 'fire-28-a2', front: 'Fire 28 A2', rear: 'Fire 28 rev A2' },
+                  { revision: 'A', image: 'fire-28-a', front: '28A', rear: 'Fire 28 rev A' },
+              ] },
+
+            { name: 'fire-32-c', pins: 32, usb: 'upright', rgb: true, back: true,
+              pcbs: [{ image: 'fire-32-c', front: '32', rear: 'Fire 32 Rev C' }] },
+            { name: 'fire-32-b', pins: 32, usb: 'flat', rgb: true, back: true,
+              pcbs: [{ image: 'fire-32-b2', front: '32 B2', rear: 'Fire 32 Rev B2' }] },
+            { name: 'fire-32-a', pins: 32, usb: 'flat', rgb: false, back: true,
+              pcbs: [{ image: 'fire-32-a', front: '32 A1', rear: 'Fire 32 Rev A1' }] },
+
+            { name: 'fire-40-c', pins: 40, usb: 'upright', rgb: true, back: true,
+              pcbs: [{ image: 'fire-40-c', front: 'Fire 40 40C', rear: 'Fire 40 Rev C' }] },
+            { name: 'fire-40-b', pins: 40, usb: 'flat', rgb: true, back: true,
+              pcbs: [{ image: 'fire-40-b', front: 'Fire 40', rear: 'Fire 40 Rev B' }] },
+            { name: 'fire-40-a', pins: 40, usb: 'flat', rgb: false, back: true,
+              pcbs: [{ image: 'fire-40-a', front: 'Fire 40 Rev A', rear: 'Fire 40 Rev A' }] },
+        ];
+
+        const state = { pins: null, usb: 'all' };
+
+        // One ROM Web's label: fire-24-usb-b becomes Fire 24 B.
+        function webLabel(name) {
+            return name.split('-').filter(p => p !== 'usb')
+                .map(p => p[0].toUpperCase() + p.slice(1)).join(' ');
+        }
+
+        function picker(id, options, current, onPick) {
+            const el = document.getElementById(id);
+            el.querySelectorAll('button').forEach(b => b.remove());
+            options.forEach(([value, label]) => {
+                const b = document.createElement('button');
+                b.textContent = label;
+                b.classList.toggle('active', value === current);
+                b.addEventListener('click', () => onPick(value));
+                el.appendChild(b);
+            });
+        }
+
+        function pcbFigure(image, side, caption) {
+            const base = `/images/boards/${image}-${side}`;
+            const fig = document.createElement('figure');
+            fig.innerHTML = `
+                <div class="pcb">
+                    <img src="${base}.webp" alt="${caption}" loading="lazy">
+                    <div class="layer shade" style="-webkit-mask-image:url(${base}-mask.webp);mask-image:url(${base}-mask.webp)"></div>
+                    <div class="layer hue" style="-webkit-mask-image:url(${base}-mask.webp);mask-image:url(${base}-mask.webp)"></div>
+                    <div class="layer gold" style="-webkit-mask-image:url(${base}-pads.webp);mask-image:url(${base}-pads.webp)"></div>
+                </div>
+                <figcaption>${side === 'top' ? 'Front' : 'Back'}</figcaption>`;
+            return fig;
+        }
+
+        function boardCard(board) {
+            const card = document.createElement('div');
+            card.className = 'board';
+            card.id = board.name;
+            card.innerHTML = `<h3>${webLabel(board.name)} <code>${board.name}</code></h3>`;
+
+            const body = document.createElement('div');
+            body.className = 'board-body';
+            const sides = document.createElement('div');
+            sides.className = 'sides';
+            const facts = document.createElement('dl');
+            facts.className = 'facts';
+
+            function show(pcb) {
+                sides.replaceChildren(pcbFigure(pcb.image, 'top', `${board.name} front`),
+                                      pcbFigure(pcb.image, 'bottom', `${board.name} back`));
+                facts.innerHTML = `
+                    <dt>Front</dt><dd>${pcb.front}</dd>
+                    <dt>Back</dt><dd>${pcb.rear}</dd>
+                    <dt>USB</dt><dd>${USB[board.usb]}</dd>
+                    <dt>RGB LED</dt><dd>${board.rgb ? 'Yes' : 'No'}</dd>
+                    <dt>Parts on back</dt><dd>${board.back ? 'Yes' : 'No'}</dd>`;
+            }
+
+            if (board.pcbs.length > 1) {
+                const revs = document.createElement('div');
+                revs.className = 'picker revisions';
+                revs.innerHTML = '<span class="picker-label">Board revision</span>';
+                card.appendChild(revs);
+                const render = current => {
+                    revs.querySelectorAll('button').forEach(b => b.remove());
+                    board.pcbs.forEach(pcb => {
+                        const b = document.createElement('button');
+                        b.textContent = pcb.revision;
+                        b.classList.toggle('active', pcb === current);
+                        b.addEventListener('click', () => render(pcb));
+                        revs.appendChild(b);
+                    });
+                    show(current);
+                };
+                render(board.pcbs[0]);
+            } else {
+                show(board.pcbs[0]);
+            }
+
+            body.append(sides, facts);
+            card.appendChild(body);
+            return card;
+        }
+
+        function update() {
+            picker('pinsPicker', [24, 28, 32, 40].map(p => [p, String(p)]), state.pins, pins => {
+                state.pins = pins;
+                state.usb = 'all';
+                update();
+                writeUrl();
+            });
+
+            const boards = BOARDS.filter(b => b.pins === state.pins);
+            const types = Object.keys(USB).filter(t => boards.some(b => b.usb === t));
+            if (!types.includes(state.usb)) state.usb = 'all';
+            document.getElementById('usbPicker').classList.toggle('hidden', state.pins === null);
+            picker('usbPicker', [['all', 'All'], ...types.map(t => [t, USB[t]])], state.usb, usb => {
+                state.usb = usb;
+                update();
+                writeUrl();
+            });
+
+            const list = document.getElementById('boards');
+            list.replaceChildren(...boards
+                .filter(b => state.usb === 'all' || b.usb === state.usb)
+                .map(boardCard));
+        }
+
+        const COLOURS = [['red', 'Red'], ['green', 'Green'], ['black', 'Black']];
+        const FINISHES = [['hasl', 'Silver (HASL)'], ['enig', 'Gold (ENIG)']];
+
+        // ?pins=24&usb=flat&colour=green&finish=enig selects those options, and
+        // #fire-28-a selects that board's pin count and highlights its card.
+        function readUrl() {
+            const query = new URLSearchParams(location.search);
+            const linked = BOARDS.find(b => '#' + b.name === location.hash);
+            const pins = linked ? linked.pins : Number(query.get('pins'));
+            state.pins = [24, 28, 32, 40].includes(pins) ? pins : null;
+            state.usb = !linked && Object.hasOwn(USB, query.get('usb')) ? query.get('usb') : 'all';
+            for (const [attr, options] of [['colour', COLOURS], ['finish', FINISHES]]) {
+                if (options.some(([value]) => value === query.get(attr))) {
+                    document.body.dataset[attr] = query.get(attr);
+                }
+            }
+            return linked;
+        }
+
+        function writeUrl() {
+            const query = new URLSearchParams();
+            if (state.pins) query.set('pins', state.pins);
+            if (state.usb !== 'all') query.set('usb', state.usb);
+            if (document.body.dataset.colour !== COLOURS[0][0]) query.set('colour', document.body.dataset.colour);
+            if (document.body.dataset.finish !== FINISHES[0][0]) query.set('finish', document.body.dataset.finish);
+            history.replaceState(null, '', query.size ? `?${query}` : location.pathname);
+        }
+
+        function setBodyPicker(id, attr, options) {
+            const pick = value => {
+                document.body.dataset[attr] = value;
+                picker(id, options, value, value => {
+                    pick(value);
+                    writeUrl();
+                });
+            };
+            pick(document.body.dataset[attr]);
+        }
+
+        function showUrl() {
+            const linked = readUrl();
+            setBodyPicker('colourPicker', 'colour', COLOURS);
+            setBodyPicker('finishPicker', 'finish', FINISHES);
+            update();
+            if (linked) {
+                const card = document.getElementById(linked.name);
+                card.classList.add('linked');
+                card.scrollIntoView();
+            }
+        }
+
+        showUrl();
+        window.addEventListener('hashchange', showUrl);
+
+        const lightbox = document.getElementById('lightbox');
+        document.getElementById('boards').addEventListener('click', e => {
+            const pcb = e.target.closest('.pcb');
+            if (!pcb) return;
+            lightbox.replaceChildren(pcb.cloneNode(true));
+            lightbox.classList.add('open');
+        });
+        lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') lightbox.classList.remove('open');
+        });
+    </script>
+</body>
+
+<script data-goatcounter="https://onerom-site.analytics.piers.rocks/count" async src="//onerom-site.analytics.piers.rocks/count.js"></script>
+
+</html>

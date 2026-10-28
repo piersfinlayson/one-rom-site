@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New page to identify which One ROM Fire board you have
+- Simplified the Getting Started hardware section
+
 ## 2026-10-22
 
 - The progress bar follows a Fire's write as it is programmed
