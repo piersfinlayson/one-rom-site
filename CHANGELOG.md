@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-10-28
 
 - New page to identify which One ROM Fire board you have
 - Simplified the Getting Started hardware section
