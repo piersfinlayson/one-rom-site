@@ -681,6 +681,11 @@ a.help-text {
     gap: 0.5rem;
 }
 #slotBuilder .sb-pcb-row select { width: 200px; }
+#slotBuilder .sb-load-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
 #slotBuilder .sb-detect-btn {
     min-width: 0;
     margin: 0;
@@ -719,10 +724,10 @@ a.help-text {
 /* Help: an expandable section header styled to match the h3 section headers
    (same colour, size, weight) - the only visible difference is the expand
    triangle. Overrides the global `h2, summary` sizing. */
-#slotBuilder .sb-help {
+#slotBuilder .sb-disclosure {
     margin-bottom: 1rem;
 }
-#slotBuilder .sb-help > summary {
+#slotBuilder .sb-disclosure > summary {
     cursor: pointer;
     color: var(--text-color);
     font-size: 1.25rem;
@@ -735,14 +740,14 @@ a.help-text {
     user-select: none;
     margin: 0;
 }
-#slotBuilder .sb-help > summary::-webkit-details-marker { display: none; }
-#slotBuilder .sb-help > summary::before {
+#slotBuilder .sb-disclosure > summary::-webkit-details-marker { display: none; }
+#slotBuilder .sb-disclosure > summary::before {
     content: "\25B8";
     font-size: 0.8em;
     transition: transform 0.15s ease;
     display: inline-block;
 }
-#slotBuilder .sb-help[open] > summary::before { transform: rotate(90deg); }
+#slotBuilder .sb-disclosure[open] > summary::before { transform: rotate(90deg); }
 
 /* Jumper legend: board wireframe + copy */
 #slotBuilder .sb-jlegend {

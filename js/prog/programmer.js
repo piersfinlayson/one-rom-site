@@ -149,12 +149,9 @@
 // =============================================================================
 
 import { compareChips } from '/js/site/utils.js'
+import { ONEROM_WASM_URL } from '/js/site/wasm.js'
 
-const ONEROM_WASM_URL = 'https://wasm.onerom.org/releases/v0.6.1/pkg/onerom_wasm.js';
-//const ONEROM_WASM_URL = 'http://localhost:8000/pkg/onerom_wasm.js';
 const ONEROM_RELEASES_MANIFEST_URL = 'https://images.onerom.org/releases.json';
-const FIRMWARE_SIZE = 48 * 1024;  // 48KB
-const MAX_METADATA_LEN = 16 * 1024;  // 16KB
 
 // Create a USB dfu device object
 let dfu = new UnifiedProgrammer();
@@ -797,7 +794,7 @@ async function startUpdate() {
         } catch (error) {
             console.log("Failed to auto-refresh device info: " + error);
 
-            setTimeout(() => alert("One ROM USB Programming completed, but failed to read back device info"), 100);
+            setTimeout(() => alert("One ROM USB Programming completed, but failed to read device info"), 100);
 
             // Show success message, then reset after 2 seconds (even on error)
             dfuStatusHandler('Complete!');
@@ -1404,20 +1401,6 @@ function buildRomConfig(wasm, { fileName, chipType, sizeHandling, fileFormat, lo
     });
 
     return romConfig;
-}
-
-// Combine base firmware + metadata + ROM images into a single flashable image,
-// each at its fixed offset, padded with 0xFF (erased flash).
-function combineFirmware(baseFirmware, metadata, romImages) {
-    const totalSize = FIRMWARE_SIZE + MAX_METADATA_LEN + romImages.length;
-    const combined = new Uint8Array(totalSize);
-
-    combined.fill(0xFF);
-    combined.set(baseFirmware, 0);
-    combined.set(metadata, FIRMWARE_SIZE);
-    combined.set(romImages, FIRMWARE_SIZE + MAX_METADATA_LEN);
-
-    return combined;
 }
 
 // Download the board+MCU base firmware for a release from images.onerom.org.
@@ -2259,7 +2242,7 @@ const CustomImageManager = {
             
             // Combine base firmware + metadata + ROM images
             buildBtn.textContent = 'Combining...';
-            this.builtFirmware = combineFirmware(baseFirmware, metadata, romImages);
+            this.builtFirmware = await this.wasm.gen_assemble(properties, baseFirmware, metadata, romImages);
             this.builtFrom = this.configSignature();
             this.lastStaleLogged = null;
             
@@ -2691,6 +2674,51 @@ function sbBoardShortCode(name) {
     return name.split('-').slice(1).join('').toUpperCase();
 }
 
+// [path, value] for each setting in obj, a nested config object.
+function flattenSettings(obj, path = []) {
+    return Object.entries(obj).flatMap(([key, value]) =>
+        value !== null && typeof value === 'object' && !Array.isArray(value)
+            ? flattenSettings(value, path.concat(key))
+            : [[path.concat(key), value]]);
+}
+
+// A firmware override's config name from its path, for example led_enabled for
+// led.enabled.
+function overrideName(path) {
+    const key = path[path.length - 1];
+    return path[0] === 'led' ? `led_${key}` : key;
+}
+
+async function saveBytes(bytes, filename) {
+    if (window.showSaveFilePicker) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'Binary Files',
+                    accept: { 'application/octet-stream': ['.bin'] }
+                }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(bytes);
+            await writable.close();
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('Save error:', error);
+                alert('Failed to save file: ' + error.message);
+            }
+        }
+    } else {
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+}
+
 // ROM Slot Builder manager
 const SlotBuilderManager = {
     wasmInitialized: false,
@@ -2835,6 +2863,11 @@ const SlotBuilderManager = {
         });
 
         document.getElementById('slotDetectBtn').addEventListener('click', () => this.detectDevice());
+
+        document.getElementById('slotLoadDeviceBtn').addEventListener('click', () => this.loadFromDevice());
+        document.getElementById('slotLoadFileBtn').addEventListener('click', () =>
+            document.getElementById('slotLoadFileInput').click());
+        document.getElementById('slotLoadFileInput').addEventListener('change', e => this.loadFromFile(e));
 
         document.getElementById('slotBuildBtn').addEventListener('click', () => this.buildFirmware());
         document.getElementById('slotSaveBtn').addEventListener('click', () => this.saveFirmware());
@@ -3252,6 +3285,7 @@ const SlotBuilderManager = {
                         <input type="file" class="sb-file-input" accept=".bin,.rom,.hex,.ihex,.ihx,.mcs,.s19,.s28,.s37,.srec,.mot" style="display:none">
                         <span class="sb-filename ${s.filename ? 'sb-set' : ''}">${s.filename ? sbAttr(s.filename) : 'No file selected'}</span>
                         ${s.filename ? '<button class="sb-icon-btn sb-clear-file" title="Remove image">&#10005;</button>' : ''}
+                        ${s.fileBytes ? '<button class="file-button sb-save-image" type="button">Save Image</button>' : ''}
                     </div>
                     <label>Format:</label>
                     <div class="sb-row-inline">
@@ -3297,7 +3331,7 @@ const SlotBuilderManager = {
                     <label>Label:</label>
                     <div class="sb-row-inline">
                         <input type="text" class="sb-label-input" placeholder="optional, e.g. C64 KERNAL 901227-03" value="${sbAttr(s.label)}">
-                        <span class="help-text" title="A short name for this ROM image, stored in the firmware metadata and shown when the device is read back. Replaces the filename as the image's label; leave blank to use the uploaded filename.">&#9432;</span>
+                        <span class="help-text" title="A short name for this ROM image, stored in the firmware metadata and shown when the device is loaded. Replaces the filename as the image's label. Leave blank to use the uploaded filename.">&#9432;</span>
                     </div>
                     <label>Options:</label>
                     <div class="sb-row-inline">
@@ -3323,6 +3357,8 @@ const SlotBuilderManager = {
             s.fileGen = ++this.fileGeneration;
             this.render();
         });
+        const saveImage = el.querySelector('.sb-save-image');
+        if (saveImage) saveImage.addEventListener('click', () => saveBytes(s.fileBytes, s.filename || `slot${i}.bin`));
         el.querySelector('.sb-standby-input').addEventListener('change', e => { s.standby = e.target.checked; this.render(); });
         el.querySelector('.sb-fmt').addEventListener('change', e => { s.fileFormat = e.target.value; this.render(); });
         el.querySelector('.sb-sh').addEventListener('change', e => { s.sizeHandling = e.target.value; this.onInputChanged(); });
@@ -3449,8 +3485,8 @@ const SlotBuilderManager = {
         // board selected the slots are preserved but not sized here - the tally is
         // not meaningful without a board and Build is disabled anyway.
         if (this.selectedBoard) this.slots.forEach((s, i) => {
-            // A standby slot without an image doesn't occupy flash.
-            if (!s.typeAlias || (s.standby && !s.fileBytes)) return;
+            // A standby or RAM slot without an image doesn't occupy flash.
+            if (!s.typeAlias || (!s.fileBytes && (s.standby || this.isRam(s)))) return;
             let b = 0;
             try {
                 b = this.wasm.image_size(this.selectedBoard, s.typeAlias, version);
@@ -3525,7 +3561,8 @@ const SlotBuilderManager = {
         const version = this.version();
         const unready = [];
         this.slots.forEach((s, i) => {
-            const imageMissing = !s.fileBytes && !s.standby;
+            // A RAM slot's image is optional.
+            const imageMissing = !s.fileBytes && !s.standby && !this.isRam(s);
             if (imageMissing && !s.typeAlias) unready.push(`Slot ${i} requires an image and ROM type.`);
             else if (imageMissing) unready.push(`Slot ${i} requires an image.`);
             else if (!s.typeAlias) unready.push(`Slot ${i} requires a ROM type.`);
@@ -3547,6 +3584,7 @@ const SlotBuilderManager = {
             const which = first === last ? `Slot ${first}` : `Slots ${first} to ${last}`;
             warnings.push(`${which} cannot be selected by jumpers${this.withReservedJumpers()}.`);
         }
+        warnings.push(...this.pluginsWithoutRelease());
         const lines = problems.concat(warnings);
 
         const ok = board && version && filled && !this.over && !pluginMsg && !problems.length;
@@ -3634,8 +3672,12 @@ const SlotBuilderManager = {
             swapBytes: s.swapBytes,
             csSelectValues: s.csValues
         });
-        if (s.standby && !s.fileBytes) delete romConfig.file;
+        if ((s.standby || this.isRam(s)) && !s.fileBytes) delete romConfig.file;
         return romConfig;
+    },
+
+    isRam(s) {
+        return !!s.typeAlias && this.wasm.chip_type_info(s.typeAlias).chip_function === 'Ram';
     },
 
     // A config of chipSets, with the reserved pins where any is ticked.
@@ -3750,7 +3792,7 @@ const SlotBuilderManager = {
             const romImages = new Uint8Array(images.firmware_images);
 
             buildBtn.textContent = 'Combining...';
-            this.builtFirmware = combineFirmware(baseFirmware, metadata, romImages);
+            this.builtFirmware = await this.wasm.gen_assemble(this.buildProperties(), baseFirmware, metadata, romImages);
             this.builtFrom = this.configSignature();
 
             console.log('Complete firmware:', this.builtFirmware.length, 'bytes');
@@ -3860,6 +3902,219 @@ const SlotBuilderManager = {
         updateProgramButtonForCurrentTab();
     },
 
+    // ---- Load from a device or an image file ---------------------------------
+
+    async loadFromDevice() {
+        const btn = document.getElementById('slotLoadDeviceBtn');
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Reading...';
+        let connected = false;
+        try {
+            await dfu.connect(true);
+            connected = true;
+            connectCount++;
+            if (dfu.getDeviceType() !== 'Fire') {
+                alert('The connected device is a One ROM Ice. This tab is Fire-only.');
+                return;
+            }
+            const flash = await dfu.upload(65536);
+            const load = await this.wasm.load_device(
+                flash,
+                (addr, len) => dfu.readMemory(addr, len),
+                (row, count, ecc) => dfu.readOtp(row, count, ecc));
+            await this.applyLoad(load, true);
+        } catch (error) {
+            // The user dismissing the device picker is not an error.
+            if (error.name === 'NotFoundError') return;
+            console.error('ROM Slot Builder load error:', error);
+            alert(error.firmware_too_new
+                ? this.firmwareTooNewText('The One ROM', error.firmware_too_new)
+                : 'Failed to load from the device: ' + (error.message || error));
+        } finally {
+            if (connected) {
+                try { await dfu.disconnect(); } catch (e) { /* already released */ }
+            }
+            btn.disabled = false;
+            btn.textContent = original;
+        }
+    },
+
+    async loadFromFile(e) {
+        const file = e.target.files[0];
+        // Clear the input so loading the same file again fires change.
+        e.target.value = '';
+        if (!file) return;
+        try {
+            const load = await this.wasm.load_file(new Uint8Array(await file.arrayBuffer()));
+            await this.applyLoad(load, false);
+        } catch (error) {
+            console.error('ROM Slot Builder load error:', error);
+            alert(error.firmware_too_new
+                ? this.firmwareTooNewText(file.name, error.firmware_too_new)
+                : 'Failed to load ' + file.name + ': ' + (error.message || error));
+        }
+    },
+
+    // Error text for a subject whose firmware is newer than One ROM Web
+    // supports.
+    firmwareTooNewText(subject, version) {
+        return `${subject}'s firmware v${version} is newer than this version of One ROM Web supports.\n` +
+            'Update One ROM Web.';
+    },
+
+    // Fill the Builder from load, once the user accepts losing what the
+    // Builder can't hold. fromDevice is whether the board size is the device's.
+    async applyLoad(load, fromDevice) {
+        try {
+            const loaded = JSON.parse(load.config_json());
+            const board = load.board();
+            const boardSize = load.board_size();
+            const version = load.version();
+            const files = load.files();
+            const bytesOf = name => load.file(name);
+            const problems = load.problems();
+
+            const state = this.stateFrom(loaded, files, bytesOf, problems);
+            const unsupported = await this.unsupportedSettings(loaded, state, board, version, problems);
+            if (unsupported.length && !confirm(
+                `This firmware has settings One ROM Web doesn't support:\n\n` +
+                unsupported.map(entry => `* ${entry}`).join('\n') +
+                `\n\nThese settings will be discarded.\n\nContinue?`)) {
+                return;
+            }
+
+            this.versionIntent = version;
+            this.boardSizeIntent = boardSize || 'M';
+            this.boardSizeFromDevice = fromDevice && !!boardSize;
+            this.reservedIntent = new Set(loaded.reserved_pins || []);
+            this.systemPluginIntent = state.systemPlugin;
+            this.userPluginIntent = state.userPlugin;
+            this.slots = state.slots;
+
+            document.getElementById('slotPcbSelect').value = board;
+            await this.onBoardChange(board);
+        } finally {
+            load.free();
+        }
+    },
+
+    // The Builder's plugins and slots for loaded, a config from a One ROM or
+    // image file. A banked or multi-chip set, or one whose chip selects couldn't
+    // be loaded, becomes an empty slot so later slot numbers don't change.
+    // The system plugin is the published USB plugin unless loaded contains a
+    // published system plugin.
+    stateFrom(loaded, files, bytesOf, problems) {
+        const unrecovered = new Set(problems.filter(p => p.kind === 'chip_select').map(p => p.set));
+        const state = { systemPlugin: 'usb', userPlugin: '', slots: [] };
+        loaded.chip_sets.forEach((set, index) => {
+            const chip = set.chips[0];
+            if (chip.type === 'system_plugin' || chip.type === 'SystemPlugin') {
+                if (chip.plugin) state.systemPlugin = chip.plugin;
+                return;
+            }
+            if (chip.type === 'user_plugin' || chip.type === 'UserPlugin') {
+                state.userPlugin = chip.plugin || '';
+                return;
+            }
+            const slot = this.newSlot();
+            state.slots.push(slot);
+            if (set.type !== 'single' || unrecovered.has(index)) return;
+
+            const file = files.find(f => f.name === chip.file);
+            slot.typeAlias = chip.type;
+            if (file) {
+                slot.filename = file.name;
+                slot.fileBytes = new Uint8Array(bytesOf(file.name));
+                slot.fileGen = ++this.fileGeneration;
+            }
+            slot.label = chip.label || '';
+            slot.standby = !!(set.firmware_overrides && set.firmware_overrides.fire &&
+                set.firmware_overrides.fire.standby === true);
+            // A value the Builder can't set, for example ignore, becomes the
+            // Builder's default.
+            let line = 0;
+            slot.csValues = this.wasm.chip_type_info(chip.type).control_lines
+                .filter(l => l.cs_type === 'configurable')
+                .map(() => {
+                    const value = chip[`cs${++line}`];
+                    return value === 'active_high' ? value : 'active_low';
+                });
+        });
+        return state;
+    },
+
+    // Each setting in loaded that the Builder's config from state doesn't have.
+    async unsupportedSettings(loaded, state, board, version, problems) {
+        const entries = [];
+        const name = key => key.replace(/_/g, ' ');
+        const setting = (key, value) => value === true ? name(key) : `${name(key)} ${JSON.stringify(value)}`;
+
+        let versions = [];
+        try {
+            versions = (await fetchCompatibleVersions(board, 'RP2350')).versions;
+        } catch (error) {
+            console.error('Error fetching firmware versions:', error);
+        }
+        if (!versions.includes(version)) entries.push(`firmware version v${version}`);
+
+        const reservable = sbReservablePins(this.wasm.board_info(board));
+        const romTypes = compatibleRomTypesForBoard(this.wasm, board, []);
+        const built = {
+            reserved_pins: (loaded.reserved_pins || []).filter(p => reservable.includes(p)),
+            rom_sets: state.slots.map((s, i) => s.typeAlias ? this.slotChipSet(s, i) : null)
+        };
+
+        Object.keys(loaded)
+            .filter(key => !['version', 'description', 'chip_sets'].includes(key))
+            .filter(key => JSON.stringify(loaded[key]) !== JSON.stringify(built[key]))
+            .forEach(key => entries.push(setting(key, loaded[key])));
+
+        let slot = 0;
+        loaded.chip_sets.forEach((set, index) => {
+            const chip = set.chips[0];
+            const plugin = { system_plugin: 'system plugin', SystemPlugin: 'system plugin',
+                user_plugin: 'user plugin', UserPlugin: 'user plugin' }[chip.type];
+            if (plugin) {
+                if (!chip.plugin) entries.push(`${plugin} ${JSON.stringify(chip.label || chip.file)}`);
+                return;
+            }
+            if (chip.type === 'pio_plugin' || chip.type === 'PioPlugin') {
+                entries.push(`PIO plugin ${JSON.stringify(chip.label || chip.file)}`);
+                return;
+            }
+
+            const prefix = `slot ${slot}`;
+            const builtSet = built.rom_sets[slot];
+            slot++;
+            if (set.type !== 'single') {
+                entries.push(`${prefix} - a ${set.type === 'banked' ? 'banked set' : 'multi-ROM set'}`);
+                return;
+            }
+            if (problems.some(p => p.set === index && p.kind === 'chip_select')) {
+                entries.push(`${prefix} - chip-select settings that aren't recognised`);
+                return;
+            }
+            if (!romTypes.includes(chip.type)) {
+                entries.push(`${prefix} - type ${JSON.stringify(chip.type)}`);
+                return;
+            }
+            const builtChip = builtSet.roms[0];
+            Object.keys(chip)
+                .filter(key => !['file', 'type', 'label', 'size_handling'].includes(key))
+                .filter(key => JSON.stringify(chip[key]) !== JSON.stringify(builtChip[key]))
+                .forEach(key => entries.push(`${prefix} - ${setting(key, chip[key])}`));
+            flattenSettings(set.firmware_overrides || {})
+                .filter(([path]) => path.join('.') !== 'fire.standby')
+                .forEach(([path, value]) => entries.push(`${prefix} - ${setting(overrideName(path), value)}`));
+        });
+
+        problems
+            .filter(p => p.kind !== 'chip_select')
+            .forEach(p => entries.push(p.text.charAt(0).toLowerCase() + p.text.slice(1)));
+        return entries;
+    },
+
     // ---- Plugins (Fire only) -----------------------------------------------
     // Same flow as CustomImageManager, reading this tab's own slot* ids and
     // reusing the shared stateless plugin helpers.
@@ -3955,6 +4210,20 @@ const SlotBuilderManager = {
             this.pluginCatalog,
             document.getElementById(selectId).value,
             this.version());
+    },
+
+    // A line for each chosen plugin without a release compatible with the
+    // selected firmware, which the drop-down then can't show.
+    pluginsWithoutRelease() {
+        const version = this.version();
+        if (!this.pluginCatalogLoaded || !this.pluginCatalog || !version) return [];
+        return [this.systemPluginIntent, this.userPluginIntent]
+            .filter(name => name && !resolvePluginRelease(this.pluginCatalog, name, version))
+            .map(name => {
+                const plugin = this.pluginCatalog.plugins().find(p => p.name === name);
+                const display = (plugin && plugin.display_name) || name;
+                return `${display} doesn't have a release compatible with firmware v${version}.`;
+            });
     },
 
     getPluginValidationMessage() {

@@ -144,7 +144,7 @@
                          in when this tab is shown, exactly as the other tabs do. -->
                     <div class="tab-input" data-tab="builder" style="display: none;">
                         <div id="slotBuilder">
-                            <details class="sb-help">
+                            <details class="sb-disclosure">
                                 <summary>Help</summary>
                                 <p style="margin: 0.6rem 0 0.7rem;">
                                     This tab supports One ROM Fire and firmware versions v0.7.0 onwards.
@@ -162,6 +162,17 @@
                                 <p style="margin: 0.9rem 0 0;">
                                     For banked sets, or more than one image per slot, use <a href="/cli/" target="_blank">One ROM CLI</a>, or <a href="/studio/" target="_blank">One ROM Studio</a> with a <a href="https://github.com/piersfinlayson/one-rom/blob/main/onerom-config/README.md" target="_blank">ROM config JSON file</a>.
                                 </p>
+                            </details>
+                            <details class="sb-disclosure">
+                                <summary>Load Existing Config</summary>
+                                <p style="margin: 0.6rem 0 0.8rem;">
+                                    Populate the Builder from a connected One ROM or a One ROM firmware file. This replaces the Builder's current settings and ROM slots with those from the device/file.
+                                </p>
+                                <div class="sb-load-row">
+                                    <button id="slotLoadDeviceBtn" class="sb-detect-btn" type="button">Load from One ROM</button>
+                                    <button id="slotLoadFileBtn" class="sb-detect-btn" type="button">Load from Firmware File</button>
+                                    <input type="file" id="slotLoadFileInput" accept=".bin" style="display:none">
+                                </div>
                             </details>
                             <hr>
 

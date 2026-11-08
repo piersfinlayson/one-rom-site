@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-08
+
+- WASM v0.6.2
+- Moves to logic shared with the CLI to combine and verify built firmware
+- One ROM Builder loads config and ROM images from a One ROM or firmware file
+- The One ROM Builder tab's Save Image button saves a slot's ROM image to a file
+- One ROM Builder displays a warning when a selected plugin doesn't have a release compatible with the firmware version
+- One ROM Builder no longer requires an image for a RAM slot
+
 ## 2026-10-28
 
 - New page to identify which One ROM Fire board you have
