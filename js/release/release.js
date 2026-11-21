@@ -57,6 +57,11 @@
             logo: `${productConfig.imagesBase}/Tux.svg`,
             logoAlt: 'Tux',
             label: 'Ubuntu/Debian/Pi<br>ARM 64-bit'
+        },
+        'arm-unknown-linux-gnueabihf': {
+            logo: `${productConfig.imagesBase}/Tux.svg`,
+            logoAlt: 'Tux',
+            label: 'Ubuntu/Debian/Pi<br>ARM 32-bit'
         }
     };
 
@@ -65,7 +70,8 @@
         'aarch64-pc-windows-msvc',
         'universal-apple-darwin',
         'x86_64-unknown-linux-gnu',
-        'aarch64-unknown-linux-gnu'
+        'aarch64-unknown-linux-gnu',
+        'arm-unknown-linux-gnueabihf'
     ];
 
     try {

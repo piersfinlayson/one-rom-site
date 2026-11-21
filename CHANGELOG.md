@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-21
+
+- CLI and Studio downloads for 32-bit ARM Linux, including 32-bit Raspberry Pi OS
+
 ## 2026-11-08
 
 - WASM v0.6.2
